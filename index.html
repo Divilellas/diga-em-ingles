@@ -1,6 +1,5 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="referrer" content="no-referrer"><!-- a voz do Google recusa pedidos que informam o site de origem -->
 <title>Diga em Inglês</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -196,7 +195,6 @@ button:focus-visible, textarea:focus-visible { outline: 2px solid var(--en); out
   <header>
     <h1>Diga em <span>Inglês</span></h1>
     <span class="engine" id="motor">carregando…</span>
-    <span class="engine" id="diag-mic"></span>
   </header>
 
   <section class="panel" aria-labelledby="lbl-pt">
@@ -245,7 +243,7 @@ button:focus-visible, textarea:focus-visible { outline: 2px solid var(--en); out
     <label for="op-voz">Voz em inglês</label>
     <select id="op-voz"></select>
     <button type="button" id="btn-testar-voz">Testar</button>
-    <p class="dica">★ = voz de alta qualidade. As vozes "Google (online)" têm boa dicção e funcionam em qualquer navegador, mas precisam de internet. <span id="voz-diag"></span></p>
+    <p class="dica">★ = voz de alta qualidade. No iPhone, baixe vozes melhores em Ajustes › Acessibilidade › Conteúdo Falado › Vozes › Inglês (ex.: Ava, Zoe ou Evan, versão <em>Premium</em> ou <em>Melhorada</em>). Depois feche e abra o app. <span id="voz-diag"></span></p>
   </div>
 
   <details class="hist" id="hist" hidden>
@@ -407,7 +405,6 @@ button:focus-visible, textarea:focus-visible { outline: 2px solid var(--en); out
   let encerraSR = null;
   function iniciaSR(tentativa) {
     if (rec) { try { rec.abort(); } catch (e) {} rec = null; }
-    paraGoogle(true);
     if (synth) try { synth.cancel(); } catch (e) {} // fala tocando + microfone = áudio travado no iOS
     base = entrada.value.trim() ? entrada.value.trim() + " " : "";
     const r = new SR();
@@ -415,16 +412,6 @@ button:focus-visible, textarea:focus-visible { outline: 2px solid var(--en); out
     // contínuo: não para na primeira pausa; encerra após PAUSA_MS de silêncio ou ao tocar de novo
     r.lang = "pt-BR"; r.interimResults = true; r.continuous = true; r.maxAlternatives = 1;
     let fin = "", parcial = "", silencio = null, vigia = null, limite = null, acabou = false, parando = false;
-    // diagnóstico: o que o navegador avisou nesta escuta (aparece embaixo, em letra pequena)
-    const t0 = performance.now(), passos = [];
-    let ultimo = "";
-    const marca = (s) => {
-      if (ultimo === s) return;
-      ultimo = s;
-      passos.push(s + " " + ((performance.now() - t0) / 1000).toFixed(1));
-      $("#diag-mic").textContent = "microfone: " + passos.join(" › ");
-    };
-    ["start", "audiostart", "soundstart", "speechstart", "speechend", "soundend", "audioend"].forEach((ev) => r.addEventListener(ev, () => marca(ev)));
     const PAUSA_MS = 1000;
     const encerra = () => {
       if (acabou) return;
@@ -442,18 +429,16 @@ button:focus-visible, textarea:focus-visible { outline: 2px solid var(--en); out
     const para = (manual) => {
       clearTimeout(silencio);
       if (parando && !manual) return;
-      marca(manual ? "toque-parar" : "pausa");
       parando = true;
       try { r.stop(); } catch (e) {}
       // se o Safari não avisar que parou, encerra assim mesmo (o prazo não é renovado por resultados novos)
       clearTimeout(vigia);
-      vigia = setTimeout(() => { marca("forçado"); try { r.abort(); } catch (e) {} encerra(); }, manual ? 400 : 1000);
+      vigia = setTimeout(() => { try { r.abort(); } catch (e) {} encerra(); }, manual ? 400 : 1000);
     };
     encerraSR = para;
     const armaSilencio = (ms) => { if (parando) return; clearTimeout(silencio); silencio = setTimeout(para, ms || PAUSA_MS); };
     r.onresult = (e) => {
       if (acabou) return;
-      marca("texto");
       parcial = ""; fin = "";
       for (let i = 0; i < e.results.length; i++) {
         const tr = e.results[i][0].transcript;
@@ -469,21 +454,18 @@ button:focus-visible, textarea:focus-visible { outline: 2px solid var(--en); out
       armaSilencio();
     };
     r.onerror = (e) => {
-      marca("erro:" + e.error);
       if (e.error === "not-allowed" || e.error === "service-not-allowed") { srBloqueado = true; atualizaMotor(); mostraDicaTeclado(); }
       else if (e.error === "network") estado.innerHTML = "<strong>Sem conexão</strong>o reconhecimento de voz precisa de internet";
       encerra();
     };
-    r.onend = () => { marca("end"); encerra(); };
+    r.onend = encerra;
     try {
-      marca("pedido");
       r.start();
       setOuvindo(true);
       estado.innerHTML = "<strong>Ouvindo…</strong>fale à vontade; para ao fazer uma pausa";
       armaSilencio(7000);
       limite = setTimeout(para, 60000);
     } catch (e) {
-      marca("recusou:" + (e && e.name));
       rec = null; encerraSR = null;
       // "já está ouvindo": libera e tenta mais uma vez; só desiste do microfone se for permissão
       if (!tentativa && !(e && e.name === "NotAllowedError")) { iniciaSR(true); return; }
@@ -1058,7 +1040,6 @@ Responda SOMENTE com JSON:
   function limpar() {
     pedido++; // descarta traduções que ainda estejam chegando
     if (synth) try { synth.cancel(); } catch (e) {}
-    paraGoogle();
     if (caps.tts) try { caps.tts.stop(); } catch (e) {}
     atual = null;
     entrada.value = "";
@@ -1103,22 +1084,16 @@ Responda SOMENTE com JSON:
       o.textContent = `${v.name.replace(/\s*\(.*?\)\s*$/, "")}${q} · ${v.lang.replace("_", "-")}`;
       ops.push(o);
     });
-    // voz online do Google: o Safari do iPhone não entrega aos sites as vozes Premium baixadas
-    [["google:en-US", "Google · inglês americano (online) ★"], ["google:en-GB", "Google · inglês britânico (online) ★"]].forEach(([v, t]) => {
-      const o = document.createElement("option"); o.value = v; o.textContent = t; ops.push(o);
-    });
     if (caps.tts) ["buttery", "airy", "glassy", "rounded"].forEach((n) => {
       const o = document.createElement("option"); o.value = "claude:" + n; o.textContent = "Claude · " + n; ops.push(o);
     });
     if (!ops.length) return;
     selVoz.replaceChildren(...ops);
-    const boas = vs.filter((v) => notaVoz(v) >= 40).length;
-    // sem voz boa no aparelho, o padrão passa a ser a do Google
-    if (!vozSalva && !boas) vozSalva = "google:en-US";
     selVoz.value = vozSalva && ops.some((o) => o.value === vozSalva) ? vozSalva : (vozEn ? vozEn.voiceURI : ops[0].value);
     $("#linha-voz").hidden = false;
+    const boas = vs.filter((v) => notaVoz(v) >= 40).length;
     $("#voz-diag").textContent = boas ? `Este navegador mostrou ${boas} voz(es) de alta qualidade.`
-      : `Este navegador mostrou ${vs.length} voz(es) do aparelho em inglês, nenhuma Premium ou Melhorada (o Safari não libera essas vozes para sites). Use a voz do Google.`;
+      : `Este navegador mostrou ${vs.length} voz(es) em inglês, nenhuma Premium ou Melhorada.`;
   }
   if (synth) { escolheVoz(); synth.onvoiceschanged = escolheVoz; setTimeout(escolheVoz, 1000); }
   selVoz.addEventListener("change", () => {
@@ -1127,55 +1102,9 @@ Responda SOMENTE com JSON:
   });
   $("#btn-testar-voz").addEventListener("click", () => { destravaVoz(); falar("Hello! This is how I sound. Nice to meet you."); });
 
-  // ---------- voz do Google (arquivo de áudio) ----------
-  let somG = null, filaG = [], idG = 0;
-  function somGoogle() {
-    if (!somG) { somG = new Audio(); somG.preload = "auto"; }
-    return somG;
-  }
-  // soltar = esvazia o elemento de áudio. No iPhone, um áudio só pausado continua segurando
-  // o som do aparelho, e o reconhecimento de voz fica vermelho sem ouvir nada.
-  function paraGoogle(soltar) {
-    idG++; filaG = [];
-    if (!somG) return;
-    try { somG.pause(); } catch (e) {}
-    if (soltar) try { somG.onended = somG.onerror = null; somG.removeAttribute("src"); somG.load(); } catch (e) {}
-  }
-  function pedacos(texto) { // o serviço aceita ~200 caracteres por vez
-    const out = [];
-    let resto = texto.replace(/\s+/g, " ").trim();
-    while (resto.length > 180) {
-      let corte = Math.max(resto.lastIndexOf(". ", 180), resto.lastIndexOf("? ", 180), resto.lastIndexOf("! ", 180));
-      if (corte < 60) corte = resto.lastIndexOf(", ", 180);
-      if (corte < 60) corte = resto.lastIndexOf(" ", 180);
-      if (corte < 1) corte = 180;
-      out.push(resto.slice(0, corte + 1).trim()); resto = resto.slice(corte + 1).trim();
-    }
-    if (resto) out.push(resto);
-    return out;
-  }
-  function falaGoogle(texto, sotaque, devagar) {
-    paraGoogle();
-    const meu = idG, a = somGoogle();
-    filaG = pedacos(texto);
-    const proximo = () => {
-      if (meu !== idG || !filaG.length) return;
-      const q = filaG.shift();
-      a.onended = proximo;
-      a.onerror = () => { if (meu !== idG) return; paraGoogle(); falaAparelho(texto, devagar); }; // sem internet/bloqueado: voz do aparelho
-      a.src = "https://translate.googleapis.com/translate_tts?client=gtx&ie=UTF-8&tl=" + sotaque + "&q=" + encodeURIComponent(q);
-      a.playbackRate = devagar ? 0.8 : 1;
-      a.play().catch(() => { if (meu === idG) { paraGoogle(); falaAparelho(texto, devagar); } });
-    };
-    proximo();
-  }
-
   function destravaVoz() { // iPhone: a 1ª fala precisa nascer de um toque
-    if (destravado) return;
+    if (destravado || !synth) return;
     destravado = true;
-    // o mesmo elemento de áudio, tocado uma vez num toque, pode tocar depois sozinho no iPhone
-    try { const a = somGoogle(); a.src = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA="; a.play().catch(() => {}); } catch (e) {}
-    if (!synth) return;
     try { const u = new SpeechSynthesisUtterance(" "); u.volume = 0; synth.speak(u); } catch (e) {}
   }
 
@@ -1186,10 +1115,6 @@ Responda SOMENTE com JSON:
       caps.tts.speak(texto, { language: "en", voice: vozSalva.slice(7), rate: devagar ? 0.75 : 1 }).catch(() => {});
       return;
     }
-    if (vozSalva.startsWith("google:")) { if (synth) try { synth.cancel(); } catch (e) {} falaGoogle(texto, vozSalva.slice(7), devagar); return; }
-    falaAparelho(texto, devagar);
-  }
-  function falaAparelho(texto, devagar) {
     if (synth && (vozEn || synth.getVoices().length === 0)) {
       try {
         synth.cancel();
