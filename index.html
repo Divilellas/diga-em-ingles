@@ -243,7 +243,7 @@ button:focus-visible, textarea:focus-visible { outline: 2px solid var(--en); out
     <label for="op-voz">Voz em inglês</label>
     <select id="op-voz"></select>
     <button type="button" id="btn-testar-voz">Testar</button>
-    <p class="dica">★ = voz de alta qualidade. No iPhone, baixe vozes melhores em Ajustes › Acessibilidade › Conteúdo Falado › Vozes › Inglês (ex.: Ava, Zoe ou Evan, versão <em>Premium</em> ou <em>Melhorada</em>). Depois feche e abra o app.</p>
+    <p class="dica">★ = voz de alta qualidade. No iPhone, baixe vozes melhores em Ajustes › Acessibilidade › Conteúdo Falado › Vozes › Inglês (ex.: Ava, Zoe ou Evan, versão <em>Premium</em> ou <em>Melhorada</em>). Depois feche e abra o app. <span id="voz-diag"></span></p>
   </div>
 
   <details class="hist" id="hist" hidden>
@@ -411,27 +411,32 @@ button:focus-visible, textarea:focus-visible { outline: 2px solid var(--en); out
     rec = r;
     // contínuo: não para na primeira pausa; encerra após PAUSA_MS de silêncio ou ao tocar de novo
     r.lang = "pt-BR"; r.interimResults = true; r.continuous = true; r.maxAlternatives = 1;
-    let fin = "", parcial = "", silencio = null, vigia = null, limite = null, acabou = false;
+    let fin = "", parcial = "", silencio = null, vigia = null, limite = null, acabou = false, parando = false;
     const PAUSA_MS = 1000;
     const encerra = () => {
       if (acabou) return;
       acabou = true;
       clearTimeout(silencio); clearTimeout(vigia); clearTimeout(limite);
-      if (rec === r) rec = null;
+      // um reconhecimento antigo que termina atrasado não mexe no novo
+      if (rec !== r && rec) return;
+      rec = null;
       encerraSR = null;
       setOuvindo(false);
       // o que ainda estava "provisório" quando parou também conta
       if ((fin + parcial).trim()) traduzir();
     };
-    const para = () => {
+    // manual = tocou no botão: encerra quase na hora, mesmo que o Safari continue mandando resultados
+    const para = (manual) => {
       clearTimeout(silencio);
+      if (parando && !manual) return;
+      parando = true;
       try { r.stop(); } catch (e) {}
-      // se o Safari não avisar que parou, encerra assim mesmo
+      // se o Safari não avisar que parou, encerra assim mesmo (o prazo não é renovado por resultados novos)
       clearTimeout(vigia);
-      vigia = setTimeout(() => { try { r.abort(); } catch (e) {} encerra(); }, 1200);
+      vigia = setTimeout(() => { try { r.abort(); } catch (e) {} encerra(); }, manual ? 400 : 1000);
     };
     encerraSR = para;
-    const armaSilencio = (ms) => { clearTimeout(silencio); silencio = setTimeout(para, ms || PAUSA_MS); };
+    const armaSilencio = (ms) => { if (parando) return; clearTimeout(silencio); silencio = setTimeout(para, ms || PAUSA_MS); };
     r.onresult = (e) => {
       if (acabou) return;
       parcial = ""; fin = "";
@@ -442,7 +447,10 @@ button:focus-visible, textarea:focus-visible { outline: 2px solid var(--en); out
         if (fin && tr.trim().toLowerCase().startsWith(fin.trim().toLowerCase())) fin = tr;
         else fin += (fin && !tr.startsWith(" ") ? " " : "") + tr;
       }
-      entrada.value = (base + fin + (parcial ? " " + parcial : "")).replace(/\s+/g, " ").trim();
+      const novo = (base + fin + (parcial ? " " + parcial : "")).replace(/\s+/g, " ").trim();
+      // o Safari às vezes reenvia o mesmo texto no silêncio: só texto novo adia a pausa
+      if (novo === entrada.value && silencio) return;
+      entrada.value = novo;
       armaSilencio();
     };
     r.onerror = (e) => {
@@ -476,8 +484,13 @@ button:focus-visible, textarea:focus-visible { outline: 2px solid var(--en); out
     destravaVoz();
     if (ouvindo) {
       if (caps.dictation) caps.dictation.stop().catch(() => {});
-      if (encerraSR) encerraSR();
-      else if (rec) { try { rec.abort(); } catch (e) {} rec = null; setOuvindo(false); }
+      if (encerraSR) encerraSR(true);
+      else if (!caps.dictation) {
+        // nada a encerrar, mas o botão ficou vermelho: libera de qualquer jeito
+        if (rec) { try { rec.abort(); } catch (e) {} rec = null; }
+        setOuvindo(false);
+        if (entrada.value.trim() && !(atual && entrada.value.trim() === atual.pt)) traduzir();
+      }
       return;
     }
     // frase anterior já traduzida: o microfone começa uma frase nova
@@ -1045,8 +1058,10 @@ Responda SOMENTE com JSON:
   // nota de qualidade: vozes "Premium"/"Enhanced"/"Natural" têm dicção bem melhor que as compactas
   function notaVoz(v) {
     let n = 0;
-    if (/premium/i.test(v.name)) n += 50;
-    if (/(enhanced|aprimorad|natural|neural|online)/i.test(v.name)) n += 40;
+    // no iPhone a qualidade às vezes só aparece no identificador (com.apple.voice.premium.en-US.Ava)
+    const id = v.name + " " + (v.voiceURI || "");
+    if (/premium/i.test(id)) n += 50;
+    if (/(enhanced|aprimorad|natural|neural|online)/i.test(id)) n += 40;
     if (/(Ava|Zoe|Evan|Nathan|Joelle|Noelle|Tom|Allison|Susan|Samantha|Aria|Jenny|Guy|Google US)/i.test(v.name)) n += 10;
     if (/en[-_]US/i.test(v.lang)) n += 5;
     if (/(Albert|Bad News|Bahh|Bells|Boing|Bubbles|Cellos|Good News|Jester|Organ|Superstar|Trinoids|Whisper|Wobble|Zarvox|Fred|Junior|Ralph|Kathy|Grandma|Grandpa|Eddy|Flo|Reed|Rocko|Sandy|Shelley)/i.test(v.name)) n -= 100;
@@ -1064,7 +1079,9 @@ Responda SOMENTE com JSON:
     const ops = [];
     vs.filter((v) => notaVoz(v) > -50).forEach((v) => {
       const o = document.createElement("option"); o.value = v.voiceURI;
-      o.textContent = `${v.name.replace(/\s*\(.*?\)\s*$/, "")}${/premium|enhanced|aprimorad|natural|neural/i.test(v.name) ? " ★" : ""} · ${v.lang.replace("_", "-")}`;
+      const id = v.name + " " + (v.voiceURI || "");
+      const q = /premium/i.test(id) ? " ★★ Premium" : /(enhanced|aprimorad|natural|neural)/i.test(id) ? " ★ Melhorada" : "";
+      o.textContent = `${v.name.replace(/\s*\(.*?\)\s*$/, "")}${q} · ${v.lang.replace("_", "-")}`;
       ops.push(o);
     });
     if (caps.tts) ["buttery", "airy", "glassy", "rounded"].forEach((n) => {
@@ -1074,6 +1091,9 @@ Responda SOMENTE com JSON:
     selVoz.replaceChildren(...ops);
     selVoz.value = vozSalva && ops.some((o) => o.value === vozSalva) ? vozSalva : (vozEn ? vozEn.voiceURI : ops[0].value);
     $("#linha-voz").hidden = false;
+    const boas = vs.filter((v) => notaVoz(v) >= 40).length;
+    $("#voz-diag").textContent = boas ? `Este navegador mostrou ${boas} voz(es) de alta qualidade.`
+      : `Este navegador mostrou ${vs.length} voz(es) em inglês, nenhuma Premium ou Melhorada.`;
   }
   if (synth) { escolheVoz(); synth.onvoiceschanged = escolheVoz; setTimeout(escolheVoz, 1000); }
   selVoz.addEventListener("change", () => {
@@ -1099,7 +1119,9 @@ Responda SOMENTE com JSON:
       try {
         synth.cancel();
         const u = new SpeechSynthesisUtterance(texto);
-        u.lang = "en-US"; if (vozEn) u.voice = vozEn;
+        // o Safari ignora um objeto de voz "velho": busca de novo na lista atual
+        const v = vozEn && synth.getVoices().find((x) => x.voiceURI === vozEn.voiceURI);
+        if (v) { u.voice = v; u.lang = v.lang.replace("_", "-"); } else u.lang = "en-US";
         u.rate = devagar ? 0.7 : 0.95;
         synth.speak(u);
         return;
