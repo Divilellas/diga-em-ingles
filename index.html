@@ -154,6 +154,14 @@ details.hist summary { cursor: pointer; color: var(--muted); font-size: 0.9rem; 
 
 .opcoes { display: flex; gap: 16px; flex-wrap: wrap; font-size: 0.88rem; color: var(--muted); }
 .opcoes label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+.linha-voz { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; font-size: 0.88rem; color: var(--muted); }
+.linha-voz[hidden] { display: none; }
+.linha-voz select {
+  flex: 1 1 180px; min-width: 0; max-width: 100%; font: inherit; font-size: 16px; color: var(--fg); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px;
+}
+.linha-voz button { font: inherit; font-size: 0.85rem; color: var(--en); background: var(--en-soft); border: 1px solid var(--en); border-radius: 999px; padding: 8px 14px; cursor: pointer; }
+.linha-voz .dica { flex-basis: 100%; }
 
 .barra {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
@@ -229,6 +237,13 @@ button:focus-visible, textarea:focus-visible { outline: 2px solid var(--en); out
   <div class="opcoes">
     <label><input type="checkbox" id="op-auto" checked> Falar a tradução automaticamente</label>
     <label><input type="checkbox" id="op-devagar"> Falar devagar</label>
+    <label><input type="checkbox" id="op-extenso" checked> Números por extenso</label>
+  </div>
+  <div class="linha-voz" id="linha-voz" hidden>
+    <label for="op-voz">Voz em inglês</label>
+    <select id="op-voz"></select>
+    <button type="button" id="btn-testar-voz">Testar</button>
+    <p class="dica">★ = voz de alta qualidade. No iPhone, baixe vozes melhores em Ajustes › Acessibilidade › Conteúdo Falado › Vozes › Inglês (ex.: Ava, Zoe ou Evan, versão <em>Premium</em> ou <em>Melhorada</em>). Depois feche e abra o app.</p>
   </div>
 
   <details class="hist" id="hist" hidden>
@@ -339,7 +354,7 @@ button:focus-visible, textarea:focus-visible { outline: 2px solid var(--en); out
     if (!(window.claude && typeof window.claude.use === "function")) return false;
     window.claude.use("dictation").then((d) => { caps.dictation = d; if (d) configuraDitado(d); atualizaMotor(); }).catch(() => {});
     window.claude.use("sample").then((s) => { caps.sample = s; atualizaMotor(); }).catch(() => {});
-    window.claude.use("tts").then((t) => { caps.tts = t; }).catch(() => {});
+    window.claude.use("tts").then((t) => { caps.tts = t; if (t) escolheVoz(); }).catch(() => {});
     return true;
   }
   if (!ligaCapacidades()) setTimeout(ligaCapacidades, 600);
@@ -443,11 +458,95 @@ button:focus-visible, textarea:focus-visible { outline: 2px solid var(--en); out
   $("#btn-trad").addEventListener("click", () => { destravaVoz(); traduzir(); });
   entrada.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); destravaVoz(); traduzir(); } });
 
+
+  // ---------- números por extenso (o reconhecimento de voz escreve "10"; queremos "dez" / "ten") ----------
+  const UN_PT = ["zero", "um", "dois", "três", "quatro", "cinco", "seis", "sete", "oito", "nove", "dez", "onze", "doze", "treze",
+    "catorze", "quinze", "dezesseis", "dezessete", "dezoito", "dezenove"];
+  const DZ_PT = ["", "", "vinte", "trinta", "quarenta", "cinquenta", "sessenta", "setenta", "oitenta", "noventa"];
+  const CT_PT = ["", "cento", "duzentos", "trezentos", "quatrocentos", "quinhentos", "seiscentos", "setecentos", "oitocentos", "novecentos"];
+  function pt999(n) {
+    if (n === 100) return "cem";
+    const c = Math.floor(n / 100), r = n % 100, p = [];
+    if (c) p.push(CT_PT[c]);
+    if (r) p.push(r < 20 ? UN_PT[r] : DZ_PT[Math.floor(r / 10)] + (r % 10 ? " e " + UN_PT[r % 10] : ""));
+    return p.join(" e ");
+  }
+  function inteiroPT(n) {
+    if (n === 0) return "zero";
+    if (n >= 1e15) return null;
+    const ESC = [null, ["mil", "mil"], ["milhão", "milhões"], ["bilhão", "bilhões"], ["trilhão", "trilhões"]];
+    const g = []; for (let x = n; x > 0; x = Math.floor(x / 1000)) g.push(x % 1000);
+    const partes = [];
+    for (let i = g.length - 1; i >= 0; i--) {
+      if (!g[i]) continue;
+      const t = i === 0 ? pt999(g[i]) : i === 1 ? (g[i] === 1 ? "mil" : pt999(g[i]) + " mil") : pt999(g[i]) + " " + ESC[i][g[i] === 1 ? 0 : 1];
+      partes.push({ t, i, v: g[i] });
+    }
+    return partes.map((p, k) => k === 0 ? p.t : ((k === partes.length - 1 && (p.v < 100 || p.v % 100 === 0)) ? " e " : " ") + p.t).join("");
+  }
+  const feminino = (t) => t.replace(/\bum\b/g, "uma").replace(/\bdois\b/g, "duas").replace(/entos\b/g, "entas");
+  const ORD_PT = ["", "primeiro", "segundo", "terceiro", "quarto", "quinto", "sexto", "sétimo", "oitavo", "nono", "décimo"];
+  function numerosPT(txt) {
+    const dig = (d) => d.replace(/\./g, "");
+    return txt
+      .replace(/R\$\s?(\d[\d.]*)(?:,(\d{2}))?/g, (m, a, c) => {
+        const n = +dig(a); let s = inteiroPT(n) + (n === 1 ? " real" : (n >= 1e6 && n % 1e6 === 0 ? " de reais" : " reais"));
+        if (c && +c) s += " e " + inteiroPT(+c) + (+c === 1 ? " centavo" : " centavos");
+        return s;
+      })
+      .replace(/\b(\d{1,2})[:h](\d{2})\b/g, (m, h, mi) => feminino(inteiroPT(+h)) + (+mi ? " e " + inteiroPT(+mi) : (+h === 1 ? " hora" : " horas")))
+      .replace(/\b(\d{1,2})([ºª°])/g, (m, n, g) => (+n <= 10 ? ORD_PT[+n].replace(/o$/, g === "ª" ? "a" : "o") : m))
+      .replace(/\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d+(?:,\d+)?/g, (m, pos, tudo) => {
+        const [i, d] = m.split(",");
+        let a = inteiroPT(+dig(i)); if (a == null) return m;
+        // "um milhão de pontos"
+        if (!d && /(lhão|lhões)$/.test(a) && /^\s+\p{L}/u.test(tudo.slice(pos + m.length)) && !/^\s+de\b/.test(tudo.slice(pos + m.length))) a += " de";
+        return d ? a + " vírgula " + (d.length <= 2 && d[0] !== "0" ? inteiroPT(+d) : [...d].map((c) => UN_PT[+c]).join(" ")) : a;
+      })
+      .replace(/\s?%/g, " por cento");
+  }
+
+  const UN_EN = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen",
+    "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"];
+  const DZ_EN = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
+  function en999(n) {
+    const h = Math.floor(n / 100), r = n % 100, p = [];
+    if (h) p.push(UN_EN[h] + " hundred");
+    if (r) p.push(r < 20 ? UN_EN[r] : DZ_EN[Math.floor(r / 10)] + (r % 10 ? "-" + UN_EN[r % 10] : ""));
+    return p.join(" ");
+  }
+  function inteiroEN(n) {
+    if (n === 0) return "zero";
+    if (n >= 1e15) return null;
+    const ESC = ["", " thousand", " million", " billion", " trillion"], p = [];
+    const g = []; for (let x = n; x > 0; x = Math.floor(x / 1000)) g.push(x % 1000);
+    for (let i = g.length - 1; i >= 0; i--) if (g[i]) p.push(en999(g[i]) + ESC[i]);
+    return p.join(" ");
+  }
+  function numerosEN(txt) {
+    const dig = (d) => d.replace(/,/g, "");
+    return txt
+      .replace(/\$\s?(\d[\d,]*)(?:\.(\d{2}))?/g, (m, a, c) => {
+        const n = +dig(a); let s = inteiroEN(n) + (n === 1 ? " dollar" : " dollars");
+        if (c && +c) s += " and " + inteiroEN(+c) + (+c === 1 ? " cent" : " cents");
+        return s;
+      })
+      .replace(/\b(\d{1,2}):(\d{2})\b/g, (m, h, mi) => inteiroEN(+h) + (+mi ? " " + (+mi < 10 ? "oh " : "") + inteiroEN(+mi) : " o'clock"))
+      .replace(/\b(\d+)(st|nd|rd|th)\b/g, (m) => m) // ordinais: a voz já lê bem
+      .replace(/(?<![\w.])\d{1,3}(?:,\d{3})+(?:\.\d+)?(?![\w])|(?<![\w.,])\d+(?:\.\d+)?(?![\w])/g, (m) => {
+        const [i, d] = m.split(".");
+        const a = inteiroEN(+dig(i)); if (a == null) return m;
+        return d ? a + " point " + [...d].map((c) => UN_EN[+c]).join(" ") : a;
+      })
+      .replace(/\s?%/g, " percent");
+  }
+
   // ---------- tradução ----------
   let pedido = 0;
   async function traduzir() {
-    const pt = entrada.value.trim();
+    let pt = entrada.value.trim();
     if (!pt) { entrada.focus(); return; }
+    if ($("#op-extenso").checked) { pt = numerosPT(pt); entrada.value = pt; }
     const meu = ++pedido;
     aviso.hidden = true;
     $("#tag-exemplo").hidden = true;
@@ -466,6 +565,7 @@ button:focus-visible, textarea:focus-visible { outline: 2px solid var(--en); out
       aviso.textContent = "Não foi possível traduzir a frase agora (sem internet?). A tradução palavra por palavra abaixo vem do dicionário offline.";
       return;
     }
+    if ($("#op-extenso").checked) atual.en = numerosEN(atual.en);
     saidaEn.textContent = atual.en;
     if ($("#op-auto").checked) falar(atual.en);
     if (!atual.enPalavras) {
@@ -870,13 +970,47 @@ Responda SOMENTE com JSON:
   // ---------- voz em inglês ----------
   const synth = window.speechSynthesis;
   let vozEn = null, destravado = false;
-  function escolheVoz() {
-    if (!synth) return;
-    const vs = synth.getVoices().filter((v) => /^en[-_]/i.test(v.lang));
-    vozEn = vs.find((v) => /en[-_]US/i.test(v.lang) && /(Samantha|Google US|Aria|Jenny|Natural|Premium|Enhanced)/i.test(v.name))
-         || vs.find((v) => /en[-_]US/i.test(v.lang)) || vs[0] || null;
+  let vozSalva = LS.get("dei-voz", ""); // voiceURI escolhido, ou "claude:<voz>"
+  const selVoz = $("#op-voz");
+  // nota de qualidade: vozes "Premium"/"Enhanced"/"Natural" têm dicção bem melhor que as compactas
+  function notaVoz(v) {
+    let n = 0;
+    if (/premium/i.test(v.name)) n += 50;
+    if (/(enhanced|aprimorad|natural|neural|online)/i.test(v.name)) n += 40;
+    if (/(Ava|Zoe|Evan|Nathan|Joelle|Noelle|Tom|Allison|Susan|Samantha|Aria|Jenny|Guy|Google US)/i.test(v.name)) n += 10;
+    if (/en[-_]US/i.test(v.lang)) n += 5;
+    if (/(Albert|Bad News|Bahh|Bells|Boing|Bubbles|Cellos|Good News|Jester|Organ|Superstar|Trinoids|Whisper|Wobble|Zarvox|Fred|Junior|Ralph|Kathy|Grandma|Grandpa|Eddy|Flo|Reed|Rocko|Sandy|Shelley)/i.test(v.name)) n -= 100;
+    return n;
   }
-  if (synth) { escolheVoz(); synth.onvoiceschanged = escolheVoz; }
+  function vozesEN() {
+    return synth ? synth.getVoices().filter((v) => /^en[-_]/i.test(v.lang)).sort((a, b) => notaVoz(b) - notaVoz(a) || a.name.localeCompare(b.name)) : [];
+  }
+  function escolheVoz() {
+    const vs = vozesEN();
+    vozEn = vs.find((v) => v.voiceURI === vozSalva) || vs.find((v) => notaVoz(v) >= 0) || vs[0] || null;
+    preencheVozes(vs);
+  }
+  function preencheVozes(vs) {
+    const ops = [];
+    vs.filter((v) => notaVoz(v) > -50).forEach((v) => {
+      const o = document.createElement("option"); o.value = v.voiceURI;
+      o.textContent = `${v.name.replace(/\s*\(.*?\)\s*$/, "")}${/premium|enhanced|aprimorad|natural|neural/i.test(v.name) ? " ★" : ""} · ${v.lang.replace("_", "-")}`;
+      ops.push(o);
+    });
+    if (caps.tts) ["buttery", "airy", "glassy", "rounded"].forEach((n) => {
+      const o = document.createElement("option"); o.value = "claude:" + n; o.textContent = "Claude · " + n; ops.push(o);
+    });
+    if (!ops.length) return;
+    selVoz.replaceChildren(...ops);
+    selVoz.value = vozSalva && ops.some((o) => o.value === vozSalva) ? vozSalva : (vozEn ? vozEn.voiceURI : ops[0].value);
+    $("#linha-voz").hidden = false;
+  }
+  if (synth) { escolheVoz(); synth.onvoiceschanged = escolheVoz; setTimeout(escolheVoz, 1000); }
+  selVoz.addEventListener("change", () => {
+    vozSalva = selVoz.value; LS.set("dei-voz", vozSalva);
+    escolheVoz(); destravaVoz(); falar("Hello! This is how I sound. Nice to meet you.");
+  });
+  $("#btn-testar-voz").addEventListener("click", () => { destravaVoz(); falar("Hello! This is how I sound. Nice to meet you."); });
 
   function destravaVoz() { // iPhone: a 1ª fala precisa nascer de um toque
     if (destravado || !synth) return;
@@ -887,6 +1021,10 @@ Responda SOMENTE com JSON:
   function falar(texto) {
     if (!texto) return;
     const devagar = $("#op-devagar").checked;
+    if (caps.tts && vozSalva.startsWith("claude:")) {
+      caps.tts.speak(texto, { language: "en", voice: vozSalva.slice(7), rate: devagar ? 0.75 : 1 }).catch(() => {});
+      return;
+    }
     if (synth && (vozEn || synth.getVoices().length === 0)) {
       try {
         synth.cancel();
@@ -905,8 +1043,9 @@ Responda SOMENTE com JSON:
   const opts = LS.get("dei-opcoes", {});
   if (typeof opts.auto === "boolean") $("#op-auto").checked = opts.auto;
   if (typeof opts.devagar === "boolean") $("#op-devagar").checked = opts.devagar;
-  ["#op-auto", "#op-devagar"].forEach((s) => $(s).addEventListener("change", () =>
-    LS.set("dei-opcoes", { auto: $("#op-auto").checked, devagar: $("#op-devagar").checked })));
+  if (typeof opts.extenso === "boolean") $("#op-extenso").checked = opts.extenso;
+  ["#op-auto", "#op-devagar", "#op-extenso"].forEach((s) => $(s).addEventListener("change", () =>
+    LS.set("dei-opcoes", { auto: $("#op-auto").checked, devagar: $("#op-devagar").checked, extenso: $("#op-extenso").checked })));
 
   function guardaHistorico(r) {
     const h = LS.get("dei-historico", []).filter((x) => x.pt !== r.pt);
