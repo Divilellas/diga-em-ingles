@@ -400,38 +400,71 @@ button:focus-visible, textarea:focus-visible { outline: 2px solid var(--en); out
     });
   }
 
-  function iniciaSR() {
+  // Reconhecimento de voz do navegador. No Safari do iPhone ele às vezes não dispara "onend"
+  // depois de stop(), ou recusa um start() novo: por isso há um vigia que encerra à força.
+  let encerraSR = null;
+  function iniciaSR(tentativa) {
+    if (rec) { try { rec.abort(); } catch (e) {} rec = null; }
+    if (synth) try { synth.cancel(); } catch (e) {} // fala tocando + microfone = áudio travado no iOS
     base = entrada.value.trim() ? entrada.value.trim() + " " : "";
-    rec = new SR();
+    const r = new SR();
+    rec = r;
     // contínuo: não para na primeira pausa; encerra após PAUSA_MS de silêncio ou ao tocar de novo
-    rec.lang = "pt-BR"; rec.interimResults = true; rec.continuous = true; rec.maxAlternatives = 1;
-    let fin = "", parcial = "", silencio = null;
+    r.lang = "pt-BR"; r.interimResults = true; r.continuous = true; r.maxAlternatives = 1;
+    let fin = "", parcial = "", silencio = null, vigia = null, limite = null, acabou = false;
     const PAUSA_MS = 1000;
-    const armaSilencio = (ms) => {
-      clearTimeout(silencio);
-      silencio = setTimeout(() => { if (rec) rec.stop(); }, ms || PAUSA_MS);
+    const encerra = () => {
+      if (acabou) return;
+      acabou = true;
+      clearTimeout(silencio); clearTimeout(vigia); clearTimeout(limite);
+      if (rec === r) rec = null;
+      encerraSR = null;
+      setOuvindo(false);
+      // o que ainda estava "provisório" quando parou também conta
+      if ((fin + parcial).trim()) traduzir();
     };
-    rec.onresult = (e) => {
+    const para = () => {
+      clearTimeout(silencio);
+      try { r.stop(); } catch (e) {}
+      // se o Safari não avisar que parou, encerra assim mesmo
+      clearTimeout(vigia);
+      vigia = setTimeout(() => { try { r.abort(); } catch (e) {} encerra(); }, 1200);
+    };
+    encerraSR = para;
+    const armaSilencio = (ms) => { clearTimeout(silencio); silencio = setTimeout(para, ms || PAUSA_MS); };
+    r.onresult = (e) => {
+      if (acabou) return;
       parcial = ""; fin = "";
       for (let i = 0; i < e.results.length; i++) {
         const tr = e.results[i][0].transcript;
-        if (e.results[i].isFinal) fin += (fin && !tr.startsWith(" ") ? " " : "") + tr; else parcial += tr;
+        if (!e.results[i].isFinal) { parcial += tr; continue; }
+        // o Safari às vezes repete no resultado novo tudo o que já tinha sido dito
+        if (fin && tr.trim().toLowerCase().startsWith(fin.trim().toLowerCase())) fin = tr;
+        else fin += (fin && !tr.startsWith(" ") ? " " : "") + tr;
       }
       entrada.value = (base + fin + (parcial ? " " + parcial : "")).replace(/\s+/g, " ").trim();
       armaSilencio();
     };
-    rec.onerror = (e) => {
+    r.onerror = (e) => {
       if (e.error === "not-allowed" || e.error === "service-not-allowed") { srBloqueado = true; atualizaMotor(); mostraDicaTeclado(); }
       else if (e.error === "network") estado.innerHTML = "<strong>Sem conexão</strong>o reconhecimento de voz precisa de internet";
+      encerra();
     };
-    rec.onend = () => {
-      clearTimeout(silencio);
-      setOuvindo(false); rec = null;
-      // o que ainda estava "provisório" quando parou também conta
-      if ((fin + parcial).trim()) traduzir();
-    };
-    try { rec.start(); setOuvindo(true); estado.innerHTML = "<strong>Ouvindo…</strong>fale à vontade; para ao fazer uma pausa"; armaSilencio(7000); }
-    catch (e) { srBloqueado = true; mostraDicaTeclado(); }
+    r.onend = encerra;
+    try {
+      r.start();
+      setOuvindo(true);
+      estado.innerHTML = "<strong>Ouvindo…</strong>fale à vontade; para ao fazer uma pausa";
+      armaSilencio(7000);
+      limite = setTimeout(para, 60000);
+    } catch (e) {
+      rec = null; encerraSR = null;
+      // "já está ouvindo": libera e tenta mais uma vez; só desiste do microfone se for permissão
+      if (!tentativa && !(e && e.name === "NotAllowedError")) { iniciaSR(true); return; }
+      setOuvindo(false);
+      if (e && e.name === "NotAllowedError") { srBloqueado = true; atualizaMotor(); }
+      mostraDicaTeclado();
+    }
   }
 
   function mostraDicaTeclado() {
@@ -443,7 +476,8 @@ button:focus-visible, textarea:focus-visible { outline: 2px solid var(--en); out
     destravaVoz();
     if (ouvindo) {
       if (caps.dictation) caps.dictation.stop().catch(() => {});
-      if (rec) rec.stop();
+      if (encerraSR) encerraSR();
+      else if (rec) { try { rec.abort(); } catch (e) {} rec = null; setOuvindo(false); }
       return;
     }
     // frase anterior já traduzida: o microfone começa uma frase nova
@@ -640,10 +674,13 @@ button:focus-visible, textarea:focus-visible { outline: 2px solid var(--en); out
       const j = await (await fetch(u)).json();
       if (meu !== pedido) return;
       const linhas = j[0].map((x) => x[0]).join("").split("\n").map((s) => s.trim());
-      if (linhas.length === alvo.length) alvo.forEach((b, i) => { b.t = linhas[i] || "—"; });
-      else alvo.forEach((b) => { b.t = "—"; b.vazio = true; });
+      if (linhas.length !== alvo.length) throw new Error("linhas");
+      alvo.forEach((b, i) => { b.t = linhas[i] || "—"; });
     } catch (e) {
-      alvo.forEach((b) => { b.t = "—"; b.vazio = true; });
+      // reserva: MyMemory, um bloco por chamada
+      const ts = await Promise.all(alvo.map((b) => myMemory(b.o).catch(() => "")));
+      if (meu !== pedido) return;
+      alvo.forEach((b, i) => { b.t = ts[i] || "—"; if (!ts[i]) b.vazio = true; });
     }
   }
 
@@ -793,15 +830,18 @@ Frase: """${pt}"""`;
     detalheEl.replaceChildren(cabecalho(alvo.mostra, ""), el("p", "det-msg", "Buscando classe e usos…"));
     rola();
     let info = cacheInfo.get(alvo.frase);
+    const erros = [];
     if (!info) {
       try {
         info = caps.sample ? await infoClaude(alvo) : null;
-        if (!info) info = await infoGoogle(alvo);
-        cacheInfo.set(alvo.frase, info);
       } catch (e) { info = null; }
+      // Google; se falhar (no Safari ele pode ser bloqueado), dicionário livre + MyMemory
+      if (!info) { try { info = await infoGoogle(alvo); } catch (e) { erros.push("Google: " + motivo(e)); } }
+      if (!info) { try { info = await infoReserva(alvo); } catch (e) { erros.push("reserva: " + motivo(e)); } }
+      if (info) cacheInfo.set(alvo.frase, info);
     }
     if (meu !== pedidoInfo) return;
-    renderDetalhe(alvo, p, info);
+    renderDetalhe(alvo, p, info, erros.join("; "));
   }
 
   function rola() {
@@ -822,11 +862,11 @@ Frase: """${pt}"""`;
     return cab;
   }
 
-  function renderDetalhe(alvo, p, info) {
+  function renderDetalhe(alvo, p, info, erro) {
     const partes = [cabecalho(alvo.mostra, info && info.traducao && info.traducao.toLowerCase() !== alvo.mostra.toLowerCase() ? info.traducao : "")];
     if (p.g && p.g !== "expressão") { const n = el("p", "det-nota"); n.append(el("b", null, "Nota: "), document.createTextNode(p.g)); partes.push(n); }
     if (!info) {
-      partes.push(el("p", "det-msg", "Não consegui buscar os detalhes agora (sem internet?)."));
+      partes.push(el("p", "det-msg", "Não consegui buscar os detalhes agora." + (erro ? " (" + erro + ")" : "")));
     } else {
       if (info.classes.length) {
         const ul = el("ul", "classes");
@@ -929,6 +969,36 @@ Frase: """${pt}"""`;
       } catch (e) { usos.forEach((u) => { u.sentido = u.sentidoEn; }); }
     }
     return { traducao, classes, usos, usosDe };
+  }
+
+  const motivo = (e) => (e && (e.message || e.name)) || String(e);
+
+  async function myMemory(txt, par) {
+    const u = "https://api.mymemory.translated.net/get?langpair=" + (par || "en|pt-BR") + "&q=" + encodeURIComponent(txt);
+    const j = await (await fetch(u)).json();
+    const t = j && j.responseData && j.responseData.translatedText;
+    if (!t || (j.responseStatus && +j.responseStatus !== 200)) throw new Error("MyMemory " + (j && j.responseStatus));
+    return t;
+  }
+
+  // reserva: Free Dictionary API (Wiktionary) para classe e exemplos; MyMemory para traduzir
+  async function infoReserva(alvo) {
+    const w = (alvo.frase.includes(" ") ? alvo.lema : alvo.frase).toLowerCase();
+    const r = await fetch("https://api.dictionaryapi.dev/api/v2/entries/en/" + encodeURIComponent(w));
+    if (!r.ok) throw new Error("dicionário " + r.status);
+    const arr = await r.json();
+    const classes = [], usos = [];
+    for (const ent of Array.isArray(arr) ? arr : []) for (const m of ent.meanings || []) {
+      const c = CLASSES[m.partOfSpeech] || m.partOfSpeech;
+      if (!classes.some((x) => x.c === c)) classes.push({ c, termos: [] });
+      for (const d of m.definitions || []) {
+        if (usos.length >= 5) break;
+        if (d.example) usos.push({ en: maiuscula(d.example), sentido: d.definition || "", c });
+      }
+    }
+    const [traducao, ...pts] = await Promise.all([myMemory(alvo.mostra).catch(() => ""), ...usos.map((u) => myMemory(u.en).catch(() => ""))]);
+    usos.forEach((u, i) => { u.pt = pts[i]; });
+    return { traducao, classes, usos, usosDe: alvo.frase.includes(" ") ? alvo.lema : "" };
   }
 
   async function infoClaude(alvo) {
