@@ -400,23 +400,22 @@ button:focus-visible, textarea:focus-visible { outline: 2px solid var(--en); out
     });
   }
 
-  // Reconhecimento de voz do navegador. No Safari do iPhone ele às vezes não dispara "onend"
-  // depois de stop(), ou recusa um start() novo: por isso há um vigia que encerra à força.
+  // Reconhecimento de voz do navegador. Volta ao jeito simples, que funcionava no Chrome do iPhone:
+  // nada de abort() nem de cancelar a fala logo antes de ouvir (no iPhone isso deixava a 2ª escuta surda).
+  // Se o navegador não avisar que parou, o vigia só libera o botão; não mexe no microfone.
   let encerraSR = null;
   function iniciaSR(tentativa) {
-    if (rec) { try { rec.abort(); } catch (e) {} rec = null; }
-    if (synth) try { synth.cancel(); } catch (e) {} // fala tocando + microfone = áudio travado no iOS
     base = entrada.value.trim() ? entrada.value.trim() + " " : "";
     const r = new SR();
     rec = r;
     // contínuo: não para na primeira pausa; encerra após PAUSA_MS de silêncio ou ao tocar de novo
     r.lang = "pt-BR"; r.interimResults = true; r.continuous = true; r.maxAlternatives = 1;
-    let fin = "", parcial = "", silencio = null, vigia = null, limite = null, acabou = false, parando = false;
+    let fin = "", parcial = "", silencio = null, vigia = null, acabou = false, parando = false;
     const PAUSA_MS = 1000;
     const encerra = () => {
       if (acabou) return;
       acabou = true;
-      clearTimeout(silencio); clearTimeout(vigia); clearTimeout(limite);
+      clearTimeout(silencio); clearTimeout(vigia);
       // um reconhecimento antigo que termina atrasado não mexe no novo
       if (rec !== r && rec) return;
       rec = null;
@@ -425,15 +424,12 @@ button:focus-visible, textarea:focus-visible { outline: 2px solid var(--en); out
       // o que ainda estava "provisório" quando parou também conta
       if ((fin + parcial).trim()) traduzir();
     };
-    // manual = tocou no botão: encerra quase na hora, mesmo que o Safari continue mandando resultados
-    const para = (manual) => {
+    const para = () => {
       clearTimeout(silencio);
-      if (parando && !manual) return;
+      if (parando) return;
       parando = true;
       try { r.stop(); } catch (e) {}
-      // se o Safari não avisar que parou, encerra assim mesmo (o prazo não é renovado por resultados novos)
-      clearTimeout(vigia);
-      vigia = setTimeout(() => { try { r.abort(); } catch (e) {} encerra(); }, manual ? 400 : 1000);
+      vigia = setTimeout(encerra, 2500);
     };
     encerraSR = para;
     const armaSilencio = (ms) => { if (parando) return; clearTimeout(silencio); silencio = setTimeout(para, ms || PAUSA_MS); };
@@ -447,16 +443,12 @@ button:focus-visible, textarea:focus-visible { outline: 2px solid var(--en); out
         if (fin && tr.trim().toLowerCase().startsWith(fin.trim().toLowerCase())) fin = tr;
         else fin += (fin && !tr.startsWith(" ") ? " " : "") + tr;
       }
-      const novo = (base + fin + (parcial ? " " + parcial : "")).replace(/\s+/g, " ").trim();
-      // o Safari às vezes reenvia o mesmo texto no silêncio: só texto novo adia a pausa
-      if (novo === entrada.value && silencio) return;
-      entrada.value = novo;
+      entrada.value = (base + fin + (parcial ? " " + parcial : "")).replace(/\s+/g, " ").trim();
       armaSilencio();
     };
     r.onerror = (e) => {
       if (e.error === "not-allowed" || e.error === "service-not-allowed") { srBloqueado = true; atualizaMotor(); mostraDicaTeclado(); }
       else if (e.error === "network") estado.innerHTML = "<strong>Sem conexão</strong>o reconhecimento de voz precisa de internet";
-      encerra();
     };
     r.onend = encerra;
     try {
@@ -464,14 +456,12 @@ button:focus-visible, textarea:focus-visible { outline: 2px solid var(--en); out
       setOuvindo(true);
       estado.innerHTML = "<strong>Ouvindo…</strong>fale à vontade; para ao fazer uma pausa";
       armaSilencio(7000);
-      limite = setTimeout(para, 60000);
     } catch (e) {
-      rec = null; encerraSR = null;
-      // "já está ouvindo": libera e tenta mais uma vez; só desiste do microfone se for permissão
-      if (!tentativa && !(e && e.name === "NotAllowedError")) { iniciaSR(true); return; }
-      setOuvindo(false);
-      if (e && e.name === "NotAllowedError") { srBloqueado = true; atualizaMotor(); }
-      mostraDicaTeclado();
+      rec = null; encerraSR = null; setOuvindo(false);
+      if (e && e.name === "NotAllowedError") { srBloqueado = true; atualizaMotor(); mostraDicaTeclado(); return; }
+      // o anterior ainda não soltou o microfone: tenta de novo daqui a pouco
+      if (!tentativa) { estado.innerHTML = "<strong>Um instante…</strong>"; setTimeout(() => iniciaSR(true), 600); return; }
+      estado.innerHTML = "<strong>O microfone não respondeu</strong>toque de novo";
     }
   }
 
@@ -484,10 +474,10 @@ button:focus-visible, textarea:focus-visible { outline: 2px solid var(--en); out
     destravaVoz();
     if (ouvindo) {
       if (caps.dictation) caps.dictation.stop().catch(() => {});
-      if (encerraSR) encerraSR(true);
+      if (encerraSR) encerraSR();
       else if (!caps.dictation) {
         // nada a encerrar, mas o botão ficou vermelho: libera de qualquer jeito
-        if (rec) { try { rec.abort(); } catch (e) {} rec = null; }
+        rec = null;
         setOuvindo(false);
         if (entrada.value.trim() && !(atual && entrada.value.trim() === atual.pt)) traduzir();
       }
