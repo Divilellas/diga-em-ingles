@@ -97,6 +97,50 @@ textarea#entrada:focus { outline: none; }
 .glosa.dir-en .o { color: var(--en); } .glosa.dir-en .t { color: var(--pt); }
 .tok.vazio .t { color: var(--muted); font-weight: 400; }
 
+.tok[aria-expanded="true"] { background: var(--en-soft); box-shadow: inset 0 -2px 0 var(--en); }
+
+/* topo do painel em português, com o botão Limpar */
+.cab-pt { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.btn-limpar {
+  display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: transparent; color: var(--fg);
+  border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 0.85rem; cursor: pointer; min-height: 36px;
+}
+.btn-limpar svg { width: 16px; height: 16px; }
+#saida-en.vazio { color: var(--muted); font-size: 1.1rem; font-style: italic; }
+
+/* detalhe da palavra tocada: classe gramatical e usos mais comuns */
+.detalhe {
+  border: 1px solid var(--en); border-radius: 12px; padding: 12px 14px; background: color-mix(in srgb, var(--en-soft) 55%, var(--surface));
+  display: flex; flex-direction: column; gap: 10px; scroll-margin-top: 12px;
+}
+.detalhe[hidden] { display: none; }
+.det-cab { display: flex; align-items: center; gap: 10px; }
+.det-cab h3 { flex: 1; min-width: 0; margin: 0; font-family: var(--f-read); font-size: 1.5rem; font-weight: 600; color: var(--en); overflow-wrap: anywhere; }
+.det-cab .trad { display: block; font-family: system-ui, sans-serif; font-size: 0.95rem; font-weight: 700; color: var(--pt); }
+.det-cab button { flex: none; width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--fg); display: grid; place-items: center; cursor: pointer; }
+.det-cab button.ouvir { border-color: var(--en); color: var(--en); }
+.det-cab svg { width: 18px; height: 18px; }
+.det-nota { margin: 0; font-size: 0.88rem; color: var(--fg); }
+.det-nota b { color: var(--en); }
+.classes { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.classes li { font-size: 0.92rem; line-height: 1.35; }
+.cls { display: inline-block; font-family: var(--f-tag); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--surface); background: var(--en); border-radius: 4px; padding: 1px 6px; margin-right: 6px; vertical-align: 1px; }
+.det-sub { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 700; margin: 2px 0 0; }
+.usos { margin: 0; padding: 0 0 0 1.4em; display: flex; flex-direction: column; gap: 6px; }
+.usos li::marker { color: var(--muted); font-family: var(--f-tag); font-size: 0.8rem; }
+.usos button {
+  width: 100%; text-align: left; background: none; border: 0; padding: 4px 6px; margin-left: -6px; border-radius: 8px;
+  color: inherit; font: inherit; cursor: pointer; display: flex; flex-direction: column; gap: 1px;
+}
+.usos button:hover { background: var(--en-soft); }
+.usos .u-en { font-family: var(--f-read); font-size: 1.08rem; color: var(--en); }
+.usos .u-pt { font-size: 0.9rem; color: var(--pt); font-weight: 700; }
+.usos .u-s { font-size: 0.78rem; color: var(--muted); }
+.exprs { display: flex; flex-wrap: wrap; gap: 6px; }
+.exprs button { border: 1px solid var(--line); background: var(--surface); color: var(--fg); border-radius: 999px; padding: 5px 10px; font: inherit; font-size: 0.84rem; cursor: pointer; }
+.exprs button b { color: var(--en); font-weight: 700; }
+.det-msg { margin: 0; font-size: 0.9rem; color: var(--muted); font-style: italic; }
+
 .aviso { font-size: 0.85rem; color: var(--warn); margin: 0; }
 
 details.hist summary { cursor: pointer; color: var(--muted); font-size: 0.9rem; }
@@ -146,7 +190,13 @@ button:focus-visible, textarea:focus-visible { outline: 2px solid var(--en); out
   </header>
 
   <section class="panel" aria-labelledby="lbl-pt">
-    <span class="label pt" id="lbl-pt">Você disse · português</span>
+    <div class="cab-pt">
+      <span class="label pt" id="lbl-pt">Você disse · português</span>
+      <button class="btn-limpar" id="btn-limpar" type="button" aria-label="Limpar a tela para uma nova frase">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        Limpar
+      </button>
+    </div>
     <textarea id="entrada" rows="2" placeholder="Toque no microfone e fale…" autocomplete="off" autocapitalize="sentences" spellcheck="false"></textarea>
     <p class="dica" id="dica" hidden></p>
   </section>
@@ -172,7 +222,8 @@ button:focus-visible, textarea:focus-visible { outline: 2px solid var(--en); out
       </div>
     </div>
     <div class="glosa dir-pt" id="glosa"></div>
-    <p class="dica">Toque numa palavra para ouvir a pronúncia em inglês.</p>
+    <div class="detalhe" id="detalhe" hidden aria-live="polite"></div>
+    <p class="dica" id="dica-tok">Toque numa palavra para ouvir a pronúncia e ver a classe e os usos mais comuns.</p>
   </section>
 
   <div class="opcoes">
@@ -380,6 +431,8 @@ button:focus-visible, textarea:focus-visible { outline: 2px solid var(--en); out
       if (rec) rec.stop();
       return;
     }
+    // frase anterior já traduzida: o microfone começa uma frase nova
+    if (atual && atual.fonte !== "exemplo" && entrada.value.trim() === atual.pt) limpar();
     if (caps.dictation) return iniciaDitado();
     if (SR && !srBloqueado) return iniciaSR();
     // reserva: ditado do teclado (funciona sempre no iPhone)
@@ -399,7 +452,7 @@ button:focus-visible, textarea:focus-visible { outline: 2px solid var(--en); out
     aviso.hidden = true;
     $("#tag-exemplo").hidden = true;
     atual = { pt, en: "", ptPalavras: tokens(pt), enPalavras: null, fonte: "" };
-    saidaEn.textContent = "Traduzindo…"; saidaEn.classList.add("carregando");
+    saidaEn.textContent = "Traduzindo…"; saidaEn.classList.remove("vazio"); saidaEn.classList.add("carregando");
     renderGlosa();
 
     let ok = false;
@@ -563,12 +616,256 @@ Frase: """${pt}"""`;
       if (p.g && !p.g.endsWith("= " + p.t)) { const g = document.createElement("span"); g.className = "g"; g.textContent = p.g; b.append(g); }
       const ingles = direcao === "pt" ? p.t : p.o;
       b.setAttribute("aria-label", `${p.o}: ${p.t}`);
-      b.addEventListener("click", () => { destravaVoz(); if (ingles && ingles !== "—") falar(ingles.split(" / ")[0]); });
+      b.setAttribute("aria-expanded", "false");
+      b.setAttribute("aria-controls", "detalhe");
+      b.addEventListener("click", () => {
+        destravaVoz();
+        if (!ingles || ingles === "—" || ingles === "…") return;
+        falar(ingles.split(" / ")[0]);
+        abreDetalhe(p, b);
+      });
       return b;
     }));
+    fechaDetalhe();
   }
   $("#dir-pt").addEventListener("click", () => { direcaoPreferida = "pt"; LS.set("dei-direcao", "pt"); renderGlosa(); });
   $("#dir-en").addEventListener("click", () => { direcaoPreferida = "en"; LS.set("dei-direcao", "en"); renderGlosa(); });
+
+  // ---------- detalhe da palavra: classe gramatical + 5 usos mais comuns ----------
+  const detalheEl = $("#detalhe");
+  const CLASSES = {
+    noun: "substantivo", verb: "verbo", adjective: "adjetivo", adverb: "advérbio", preposition: "preposição",
+    pronoun: "pronome", conjunction: "conjunção", interjection: "interjeição", exclamation: "interjeição",
+    article: "artigo", determiner: "determinante", abbreviation: "abreviação", phrase: "expressão",
+    "auxiliary verb": "verbo auxiliar", "modal verb": "verbo modal", prefix: "prefixo", suffix: "sufixo",
+    numeral: "numeral", number: "numeral", "proper noun": "nome próprio", contraction: "contração",
+  };
+  const cacheInfo = new Map();
+  let tokAberto = null, pedidoInfo = 0;
+  const ICO_SOM = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg>';
+  const ICO_X = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
+  const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+  const maiuscula = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+
+  // de um bloco ("the traffic", "to eat", "get home") tira a palavra/expressão a pesquisar
+  function alvoDe(p) {
+    let en = String((direcao === "pt" ? p.t : p.o) || "").split(" / ")[0];
+    en = en.replace(/’/g, "'").replace(/\([^)]*\)/g, " ").replace(/[^A-Za-z0-9' -]/g, " ").replace(/\s+/g, " ").trim();
+    const pal = en.split(" ").filter(Boolean);
+    const conteudo = pal.filter((w) => !DETS.has(w.toLowerCase()) && w.toLowerCase() !== "to");
+    let usa = conteudo.length ? conteudo : pal;
+    // contrações: o dicionário confunde "I'll" com "ill"; pesquisa o verbo por trás (will, be, do…)
+    if (usa.length === 1 && usa[0].includes("'")) { const v = verboDaContracao(usa[0].toLowerCase()); if (v) usa = [v]; }
+    const primeira = (usa[0] || "").toLowerCase();
+    const I = window.IRREG_EN || {};
+    return { mostra: en, frase: usa.join(" "), primeira, lema: I[primeira] || primeira };
+  }
+
+  function verboDaContracao(w) {
+    if (w.endsWith("n't")) {
+      const r = w.slice(0, -3);
+      return { ca: "can", wo: "will", is: "be", are: "be", was: "be", were: "be", ai: "be", does: "do", did: "do", sha: "shall" }[r] || r;
+    }
+    const m = /'(ll|m|re|ve|d|s)$/.exec(w);
+    if (!m) return null;
+    if (m[1] === "s") {
+      const antes = w.slice(0, -2);
+      if (antes === "let") return "let";
+      return ["it", "he", "she", "that", "what", "there", "here", "who", "where", "how", "everything", "nobody"].includes(antes) ? "be" : antes;
+    }
+    return { ll: "will", m: "be", re: "be", ve: "have", d: "would" }[m[1]];
+  }
+
+  function fechaDetalhe() {
+    pedidoInfo++;
+    detalheEl.hidden = true; detalheEl.replaceChildren();
+    if (tokAberto) tokAberto.setAttribute("aria-expanded", "false");
+    tokAberto = null;
+  }
+
+  async function abreDetalhe(p, botao) {
+    const alvo = alvoDe(p);
+    if (!alvo.frase) return;
+    if (tokAberto) tokAberto.setAttribute("aria-expanded", "false");
+    tokAberto = botao; botao.setAttribute("aria-expanded", "true");
+    const meu = ++pedidoInfo;
+    detalheEl.hidden = false;
+    detalheEl.replaceChildren(cabecalho(alvo.mostra, ""), el("p", "det-msg", "Buscando classe e usos…"));
+    rola();
+    let info = cacheInfo.get(alvo.frase);
+    if (!info) {
+      try {
+        info = caps.sample ? await infoClaude(alvo) : null;
+        if (!info) info = await infoGoogle(alvo);
+        cacheInfo.set(alvo.frase, info);
+      } catch (e) { info = null; }
+    }
+    if (meu !== pedidoInfo) return;
+    renderDetalhe(alvo, p, info);
+  }
+
+  function rola() {
+    requestAnimationFrame(() => { try { detalheEl.scrollIntoView({ block: "start", behavior: "smooth" }); } catch (e) {} });
+  }
+
+  function cabecalho(palavra, traducao) {
+    const cab = el("div", "det-cab");
+    const h = el("h3", null, palavra);
+    if (traducao) h.append(el("span", "trad", traducao));
+    const ouvir = el("button", "ouvir"); ouvir.type = "button"; ouvir.innerHTML = ICO_SOM;
+    ouvir.setAttribute("aria-label", "Ouvir " + palavra);
+    ouvir.addEventListener("click", () => { destravaVoz(); falar(palavra); });
+    const fechar = el("button"); fechar.type = "button"; fechar.innerHTML = ICO_X;
+    fechar.setAttribute("aria-label", "Fechar detalhes");
+    fechar.addEventListener("click", () => { const b = tokAberto; fechaDetalhe(); if (b) b.focus(); });
+    cab.append(h, ouvir, fechar);
+    return cab;
+  }
+
+  function renderDetalhe(alvo, p, info) {
+    const partes = [cabecalho(alvo.mostra, info && info.traducao && info.traducao.toLowerCase() !== alvo.mostra.toLowerCase() ? info.traducao : "")];
+    if (p.g && p.g !== "expressão") { const n = el("p", "det-nota"); n.append(el("b", null, "Nota: "), document.createTextNode(p.g)); partes.push(n); }
+    if (!info) {
+      partes.push(el("p", "det-msg", "Não consegui buscar os detalhes agora (sem internet?)."));
+    } else {
+      if (info.classes.length) {
+        const ul = el("ul", "classes");
+        info.classes.forEach((c) => { const li = el("li"); li.append(el("span", "cls", c.c), document.createTextNode(c.termos.join(" · "))); ul.append(li); });
+        partes.push(ul);
+      }
+      if (info.usos.length) {
+        partes.push(el("p", "det-sub", (info.usos.length >= 5 ? "Os 5 usos mais comuns" : "Usos mais comuns") + (info.usosDe ? ` de “${info.usosDe}”` : "")));
+        const ol = el("ol", "usos");
+        info.usos.forEach((u) => {
+          const li = el("li"); const b = el("button"); b.type = "button";
+          b.setAttribute("aria-label", "Ouvir: " + u.en);
+          b.append(el("span", "u-en", u.en));
+          if (u.pt) b.append(el("span", "u-pt", u.pt));
+          if (u.sentido) b.append(el("span", "u-s", (u.c ? u.c + " · " : "") + u.sentido));
+          b.addEventListener("click", () => { destravaVoz(); falar(u.en); });
+          li.append(b); ol.append(li);
+        });
+        partes.push(ol);
+      }
+      if (!info.classes.length && !info.usos.length) partes.push(el("p", "det-msg", "Sem mais detalhes para esta palavra."));
+    }
+    // expressões da tabela que começam com esta palavra (get home, get up, get tired…)
+    const E = window.EXPR_EN || {};
+    const exprs = Object.keys(E).filter((k) => k.startsWith(alvo.lema + " ") && k !== alvo.mostra.toLowerCase()).slice(0, 8);
+    if (exprs.length) {
+      partes.push(el("p", "det-sub", `Expressões com “${alvo.lema}”`));
+      const box = el("div", "exprs");
+      exprs.forEach((k) => {
+        const b = el("button"); b.type = "button";
+        b.append(el("b", null, k), document.createTextNode(" · " + E[k][0]));
+        b.addEventListener("click", () => { destravaVoz(); falar(k.replace(/one's/g, "my")); });
+        box.append(b);
+      });
+      partes.push(box);
+    }
+    detalheEl.replaceChildren(...partes);
+    rola();
+  }
+
+  async function gtx(q, dts) {
+    const u = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=pt&hl=pt&dj=1" +
+      dts.map((d) => "&dt=" + d).join("") + "&q=" + encodeURIComponent(q);
+    const r = await fetch(u);
+    if (!r.ok) throw new Error("http " + r.status);
+    return r.json();
+  }
+
+  async function infoGoogle(alvo) {
+    const tem = (j) => (j.dict && j.dict.length) || (j.definitions && j.definitions.length);
+    let j = await gtx(alvo.frase, ["t", "bd", "md", "ex"]);
+    const traducao = (j.sentences || []).map((s) => s.trans || "").join("").trim();
+    // expressão sem exemplos no dicionário: os usos vêm da 1ª palavra (get home -> get)
+    let usosDe = "";
+    if (!(j.definitions && j.definitions.length) && alvo.frase.includes(" ")) {
+      const j2 = await gtx(alvo.lema, ["t", "bd", "md", "ex"]);
+      if (tem(j2)) { usosDe = alvo.lema; j = Object.assign({}, j2, { dict: (j.dict && j.dict.length) ? j.dict : j2.dict }); }
+    }
+    // forma flexionada (got, went, cars): o verbete com os usos fica na forma básica
+    const baseForm = (j.dict && j.dict[0] && j.dict[0].base_form) || (j.definitions && j.definitions[0] && j.definitions[0].base_form);
+    if (!(j.definitions && j.definitions.length) && baseForm && baseForm !== alvo.frase) {
+      const j2 = await gtx(baseForm, ["t", "bd", "md", "ex"]);
+      if (tem(j2)) j = Object.assign({}, j2, { dict: (j.dict && j.dict.length) ? j.dict : j2.dict });
+    }
+    const classes = (j.dict || []).map((d) => ({ c: CLASSES[d.pos] || d.pos, termos: (d.terms || []).slice(0, 5) }));
+    for (const d of j.definitions || []) {
+      const c = CLASSES[d.pos] || d.pos;
+      if (!classes.some((x) => x.c === c)) classes.push({ c, termos: [] });
+    }
+    // classe principal primeiro (a ordem dos verbetes de definição segue o uso mais comum)
+    const ordemDef = (j.definitions || []).map((d) => CLASSES[d.pos] || d.pos);
+    const pos = (c) => { const i = ordemDef.indexOf(c); return i < 0 ? 99 : i; };
+    classes.sort((a, b) => pos(a.c) - pos(b.c));
+    if (classes.some((c) => c.termos.length)) for (let i = classes.length - 1; i >= 0; i--) if (!classes[i].termos.length) classes.splice(i, 1);
+    // usos: a ordem dos sentidos no dicionário já é do mais comum para o menos comum
+    const usos = [];
+    for (const d of j.definitions || []) {
+      for (const e of d.entry || []) {
+        if (usos.length >= 5) break;
+        if (!e.example || /^see /i.test(e.gloss || "")) continue;
+        usos.push({ en: maiuscula(e.example), sentidoEn: e.gloss || "", c: CLASSES[d.pos] || d.pos });
+      }
+    }
+    // menos de 5: completa com as frases de exemplo avulsas do dicionário
+    const vistos = new Set(usos.map((u) => u.en.toLowerCase()));
+    for (const x of (j.examples && j.examples.example) || []) {
+      if (usos.length >= 5) break;
+      const txt = maiuscula(String(x.text || "").replace(/<[^>]+>/g, "").trim());
+      if (!txt || vistos.has(txt.toLowerCase())) continue;
+      vistos.add(txt.toLowerCase());
+      usos.push({ en: txt, sentidoEn: "", c: "" });
+    }
+    if (usos.length) {
+      try {
+        const linhas = usos.flatMap((u) => [u.en, u.sentidoEn || "-"]);
+        const t = await gtx(linhas.join("\n"), ["t"]);
+        const out = (t.sentences || []).map((s) => s.trans || "").join("").split("\n").map((s) => s.trim());
+        if (out.length === linhas.length) usos.forEach((u, i) => { u.pt = maiuscula(out[2 * i]); u.sentido = u.sentidoEn ? out[2 * i + 1] : ""; });
+        else usos.forEach((u) => { u.sentido = u.sentidoEn; });
+      } catch (e) { usos.forEach((u) => { u.sentido = u.sentidoEn; }); }
+    }
+    return { traducao, classes, usos, usosDe };
+  }
+
+  async function infoClaude(alvo) {
+    const prompt =
+`Um brasileiro aprendendo inglês tocou na palavra/expressão "${alvo.mostra}"${atual && atual.en ? ` da frase "${atual.en}"` : ""}.
+Responda SOMENTE com JSON:
+{"traducao": "tradução curta em português",
+ "classes": [{"c": "classe gramatical em português (verbo, substantivo, adjetivo, advérbio, preposição, pronome, conjunção, interjeição, expressão…)", "termos": ["até 5 traduções em português para essa classe, da mais comum para a menos comum"]}],
+ "usos": [{"en": "frase curta e natural em inglês com esse uso", "pt": "tradução da frase", "c": "classe", "sentido": "o sentido nesse uso, em até 6 palavras em português"}]}
+"usos": exatamente os 5 usos mais comuns no dia a dia, do mais comum para o menos comum, incluindo phrasal verbs e expressões quando forem os usos mais frequentes.`;
+    try {
+      const r = await caps.sample.json(prompt, { modelTier: "quick" });
+      if (!r || !Array.isArray(r.usos)) return null;
+      return {
+        traducao: String(r.traducao || ""),
+        classes: (Array.isArray(r.classes) ? r.classes : []).map((c) => ({ c: String(c.c || ""), termos: (Array.isArray(c.termos) ? c.termos : []).slice(0, 5).map(String) })),
+        usos: r.usos.slice(0, 5).map((u) => ({ en: String(u.en || ""), pt: String(u.pt || ""), c: String(u.c || ""), sentido: String(u.sentido || "") })),
+      };
+    } catch (e) {
+      if (e && e.code === "not_granted") { caps.sample = null; atualizaMotor(); }
+      return null;
+    }
+  }
+
+  // ---------- limpar a tela para uma nova frase ----------
+  function limpar() {
+    pedido++; // descarta traduções que ainda estejam chegando
+    if (synth) try { synth.cancel(); } catch (e) {}
+    if (caps.tts) try { caps.tts.stop(); } catch (e) {}
+    atual = null;
+    entrada.value = "";
+    saidaEn.textContent = "A tradução aparece aqui.";
+    saidaEn.classList.remove("carregando"); saidaEn.classList.add("vazio");
+    glosaEl.replaceChildren(); fechaDetalhe();
+    aviso.hidden = true; $("#tag-exemplo").hidden = true;
+  }
+  $("#btn-limpar").addEventListener("click", () => { limpar(); window.scrollTo({ top: 0, behavior: "smooth" }); });
 
   // ---------- voz em inglês ----------
   const synth = window.speechSynthesis;
@@ -628,7 +925,7 @@ Frase: """${pt}"""`;
       b.addEventListener("click", () => {
         destravaVoz();
         atual = Object.assign({ fonte: "historico" }, x);
-        entrada.value = x.pt; saidaEn.textContent = x.en; saidaEn.classList.remove("carregando");
+        entrada.value = x.pt; saidaEn.textContent = x.en; saidaEn.classList.remove("carregando", "vazio");
         $("#tag-exemplo").hidden = true; aviso.hidden = true;
         renderGlosa(); window.scrollTo({ top: 0, behavior: "smooth" });
         if ($("#op-auto").checked) falar(x.en);
