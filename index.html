@@ -406,7 +406,7 @@ button:focus-visible, textarea:focus-visible { outline: 2px solid var(--en); out
   let encerraSR = null;
   function iniciaSR(tentativa) {
     if (rec) { try { rec.abort(); } catch (e) {} rec = null; }
-    paraGoogle();
+    paraGoogle(true);
     if (synth) try { synth.cancel(); } catch (e) {} // fala tocando + microfone = áudio travado no iOS
     base = entrada.value.trim() ? entrada.value.trim() + " " : "";
     const r = new SR();
@@ -1117,7 +1117,14 @@ Responda SOMENTE com JSON:
     if (!somG) { somG = new Audio(); somG.preload = "auto"; }
     return somG;
   }
-  function paraGoogle() { idG++; filaG = []; if (somG) try { somG.pause(); } catch (e) {} }
+  // soltar = esvazia o elemento de áudio. No iPhone, um áudio só pausado continua segurando
+  // o som do aparelho, e o reconhecimento de voz fica vermelho sem ouvir nada.
+  function paraGoogle(soltar) {
+    idG++; filaG = [];
+    if (!somG) return;
+    try { somG.pause(); } catch (e) {}
+    if (soltar) try { somG.onended = somG.onerror = null; somG.removeAttribute("src"); somG.load(); } catch (e) {}
+  }
   function pedacos(texto) { // o serviço aceita ~200 caracteres por vez
     const out = [];
     let resto = texto.replace(/\s+/g, " ").trim();
