@@ -406,7 +406,7 @@ button:focus-visible, textarea:focus-visible { outline: 2px solid var(--en); out
     // contínuo: não para na primeira pausa; encerra após PAUSA_MS de silêncio ou ao tocar de novo
     rec.lang = "pt-BR"; rec.interimResults = true; rec.continuous = true; rec.maxAlternatives = 1;
     let fin = "", parcial = "", silencio = null;
-    const PAUSA_MS = 1500;
+    const PAUSA_MS = 1000;
     const armaSilencio = (ms) => {
       clearTimeout(silencio);
       silencio = setTimeout(() => { if (rec) rec.stop(); }, ms || PAUSA_MS);
