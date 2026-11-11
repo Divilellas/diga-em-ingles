@@ -196,6 +196,7 @@ button:focus-visible, textarea:focus-visible { outline: 2px solid var(--en); out
   <header>
     <h1>Diga em <span>Inglês</span></h1>
     <span class="engine" id="motor">carregando…</span>
+    <span class="engine" id="diag-mic"></span>
   </header>
 
   <section class="panel" aria-labelledby="lbl-pt">
@@ -414,6 +415,16 @@ button:focus-visible, textarea:focus-visible { outline: 2px solid var(--en); out
     // contínuo: não para na primeira pausa; encerra após PAUSA_MS de silêncio ou ao tocar de novo
     r.lang = "pt-BR"; r.interimResults = true; r.continuous = true; r.maxAlternatives = 1;
     let fin = "", parcial = "", silencio = null, vigia = null, limite = null, acabou = false, parando = false;
+    // diagnóstico: o que o navegador avisou nesta escuta (aparece embaixo, em letra pequena)
+    const t0 = performance.now(), passos = [];
+    let ultimo = "";
+    const marca = (s) => {
+      if (ultimo === s) return;
+      ultimo = s;
+      passos.push(s + " " + ((performance.now() - t0) / 1000).toFixed(1));
+      $("#diag-mic").textContent = "microfone: " + passos.join(" › ");
+    };
+    ["start", "audiostart", "soundstart", "speechstart", "speechend", "soundend", "audioend"].forEach((ev) => r.addEventListener(ev, () => marca(ev)));
     const PAUSA_MS = 1000;
     const encerra = () => {
       if (acabou) return;
@@ -431,16 +442,18 @@ button:focus-visible, textarea:focus-visible { outline: 2px solid var(--en); out
     const para = (manual) => {
       clearTimeout(silencio);
       if (parando && !manual) return;
+      marca(manual ? "toque-parar" : "pausa");
       parando = true;
       try { r.stop(); } catch (e) {}
       // se o Safari não avisar que parou, encerra assim mesmo (o prazo não é renovado por resultados novos)
       clearTimeout(vigia);
-      vigia = setTimeout(() => { try { r.abort(); } catch (e) {} encerra(); }, manual ? 400 : 1000);
+      vigia = setTimeout(() => { marca("forçado"); try { r.abort(); } catch (e) {} encerra(); }, manual ? 400 : 1000);
     };
     encerraSR = para;
     const armaSilencio = (ms) => { if (parando) return; clearTimeout(silencio); silencio = setTimeout(para, ms || PAUSA_MS); };
     r.onresult = (e) => {
       if (acabou) return;
+      marca("texto");
       parcial = ""; fin = "";
       for (let i = 0; i < e.results.length; i++) {
         const tr = e.results[i][0].transcript;
@@ -456,18 +469,21 @@ button:focus-visible, textarea:focus-visible { outline: 2px solid var(--en); out
       armaSilencio();
     };
     r.onerror = (e) => {
+      marca("erro:" + e.error);
       if (e.error === "not-allowed" || e.error === "service-not-allowed") { srBloqueado = true; atualizaMotor(); mostraDicaTeclado(); }
       else if (e.error === "network") estado.innerHTML = "<strong>Sem conexão</strong>o reconhecimento de voz precisa de internet";
       encerra();
     };
-    r.onend = encerra;
+    r.onend = () => { marca("end"); encerra(); };
     try {
+      marca("pedido");
       r.start();
       setOuvindo(true);
       estado.innerHTML = "<strong>Ouvindo…</strong>fale à vontade; para ao fazer uma pausa";
       armaSilencio(7000);
       limite = setTimeout(para, 60000);
     } catch (e) {
+      marca("recusou:" + (e && e.name));
       rec = null; encerraSR = null;
       // "já está ouvindo": libera e tenta mais uma vez; só desiste do microfone se for permissão
       if (!tentativa && !(e && e.name === "NotAllowedError")) { iniciaSR(true); return; }
