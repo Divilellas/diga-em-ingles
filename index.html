@@ -470,12 +470,12 @@ button:focus-visible, textarea:focus-visible { outline: 2px solid var(--en); out
 
   function mostraDicaTeclado() {
     dica.hidden = false;
-    dica.innerHTML = "Toque no <strong>🎤 do teclado</strong> (embaixo, à direita) e fale. Quando você parar de falar, eu traduzo sozinho.";
+    dica.innerHTML = "Toque no <strong>🎤 do teclado</strong> (embaixo, à direita) e fale. Não precisa tocar para parar: quando você parar de falar, eu traduzo sozinho.";
   }
 
   // ---------- ditado pelo teclado (iPhone) ----------
   // O botão abre o teclado; o ditado da Apple escreve no campo; após uma pausa, traduz sozinho.
-  let modoTeclado = false, pausaTeclado = null;
+  let modoTeclado = false, pausaTeclado = null, fechouEm = 0;
   const PAUSA_TECLADO_MS = 1800;
   function abreTeclado() {
     modoTeclado = true;
@@ -488,6 +488,7 @@ button:focus-visible, textarea:focus-visible { outline: 2px solid var(--en); out
     const t = entrada.value.trim();
     if (!modoTeclado || !t || (atual && t === atual.pt)) return;
     modoTeclado = false;
+    fechouEm = Date.now();
     dica.hidden = true;
     estado.innerHTML = "<strong>Toque e fale</strong>em português";
     entrada.blur(); // fecha o teclado para mostrar a tradução
@@ -517,6 +518,9 @@ button:focus-visible, textarea:focus-visible { outline: 2px solid var(--en); out
       }
       return;
     }
+    // iPhone: tocar no botão durante o ditado fecha o teclado e já traduz (no "blur");
+    // esse mesmo toque não pode apagar a frase nem reabrir o teclado
+    if (Date.now() - fechouEm < 800) return;
     // frase anterior já traduzida: o microfone começa uma frase nova
     if (atual && atual.fonte !== "exemplo" && entrada.value.trim() === atual.pt) limpar();
     if (caps.dictation) return iniciaDitado();
