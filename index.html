@@ -291,7 +291,10 @@ button:focus-visible, textarea:focus-visible { outline: 2px solid var(--en); out
   const caps = { dictation: null, sample: null, tts: null };
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   const emMoldura = (() => { try { return window.self !== window.top; } catch (e) { return true; } })();
-  let srBloqueado = emMoldura; // dentro do artifact o navegador recusa o microfone direto
+  // iPhone/iPad: todo navegador usa o reconhecimento de voz do WebKit, que trava na 2ª escuta.
+  // Lá o botão usa o ditado do teclado (nativo da Apple), que não trava.
+  const ehIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  let srBloqueado = emMoldura || ehIOS; // dentro do artifact o navegador recusa o microfone direto
   let ouvindo = false, rec = null, base = "", finais = "";
   let direcaoPreferida = LS.get("dei-direcao", "en"); // padrão: mostrar o inglês dividido em blocos
   let direcao = direcaoPreferida;
@@ -467,8 +470,39 @@ button:focus-visible, textarea:focus-visible { outline: 2px solid var(--en); out
 
   function mostraDicaTeclado() {
     dica.hidden = false;
-    dica.innerHTML = "Neste aparelho, toque no campo acima e use o <strong>microfone do teclado</strong> para ditar. Depois toque em <strong>Traduzir</strong>.";
+    dica.innerHTML = "Toque no <strong>🎤 do teclado</strong> (embaixo, à direita) e fale. Quando você parar de falar, eu traduzo sozinho.";
   }
+
+  // ---------- ditado pelo teclado (iPhone) ----------
+  // O botão abre o teclado; o ditado da Apple escreve no campo; após uma pausa, traduz sozinho.
+  let modoTeclado = false, pausaTeclado = null;
+  const PAUSA_TECLADO_MS = 1800;
+  function abreTeclado() {
+    modoTeclado = true;
+    mostraDicaTeclado();
+    estado.innerHTML = "<strong>Toque no 🎤 do teclado</strong>e fale em português";
+    entrada.focus(); // precisa ser no próprio toque para o teclado abrir no iPhone
+  }
+  function traduzTeclado() {
+    clearTimeout(pausaTeclado);
+    const t = entrada.value.trim();
+    if (!modoTeclado || !t || (atual && t === atual.pt)) return;
+    modoTeclado = false;
+    dica.hidden = true;
+    estado.innerHTML = "<strong>Toque e fale</strong>em português";
+    entrada.blur(); // fecha o teclado para mostrar a tradução
+    traduzir();
+  }
+  entrada.addEventListener("input", () => {
+    if (!modoTeclado) return;
+    clearTimeout(pausaTeclado);
+    pausaTeclado = setTimeout(traduzTeclado, PAUSA_TECLADO_MS);
+  });
+  entrada.addEventListener("blur", () => {
+    if (!modoTeclado) return;
+    if (entrada.value.trim()) traduzTeclado();
+    else { modoTeclado = false; estado.innerHTML = "<strong>Toque e fale</strong>em português"; }
+  });
 
   btnMic.addEventListener("click", () => {
     destravaVoz();
@@ -487,9 +521,8 @@ button:focus-visible, textarea:focus-visible { outline: 2px solid var(--en); out
     if (atual && atual.fonte !== "exemplo" && entrada.value.trim() === atual.pt) limpar();
     if (caps.dictation) return iniciaDitado();
     if (SR && !srBloqueado) return iniciaSR();
-    // reserva: ditado do teclado (funciona sempre no iPhone)
-    mostraDicaTeclado();
-    entrada.focus();
+    // iPhone (ou microfone recusado): ditado do teclado
+    abreTeclado();
   });
 
   $("#btn-trad").addEventListener("click", () => { destravaVoz(); traduzir(); });
@@ -583,6 +616,7 @@ button:focus-visible, textarea:focus-visible { outline: 2px solid var(--en); out
   async function traduzir() {
     let pt = entrada.value.trim();
     if (!pt) { entrada.focus(); return; }
+    clearTimeout(pausaTeclado); modoTeclado = false;
     if ($("#op-extenso").checked) { pt = numerosPT(pt); entrada.value = pt; }
     const meu = ++pedido;
     aviso.hidden = true;
