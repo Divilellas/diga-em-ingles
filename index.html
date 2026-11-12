@@ -332,7 +332,7 @@ button:focus-visible, textarea:focus-visible { outline: 2px solid var(--en); out
     for (let i = 0; i < lista.length; i++) {
       if (i + 1 < lista.length) {
         const par = (lista[i] + " " + lista[i + 1]).toLowerCase();
-        if (EXPR[par]) { out.push({ o: lista[i] + " " + lista[i + 1], t: EXPR[par] }); i++; continue; }
+        if (EXPR[par]) { out.push({ o: lista[i] + " " + lista[i + 1], t: EXPR[par], expr: true }); i++; continue; }
       }
       out.push(glosaPalavra(lista[i]));
     }
@@ -643,12 +643,14 @@ button:focus-visible, textarea:focus-visible { outline: 2px solid var(--en); out
     if ($("#op-extenso").checked) atual.en = numerosEN(atual.en);
     saidaEn.textContent = atual.en;
     if ($("#op-auto").checked) falar(atual.en);
+    const alinhando = atual.fonte !== "claude" ? alinhaPT(atual.ptPalavras, atual.en, meu) : null;
     if (!atual.enPalavras) {
       atual.enPalavras = blocosEN(atual.en);
       renderGlosa();
       await traduzBlocos(atual.enPalavras, meu);
       if (meu !== pedido) return;
     }
+    if (alinhando) { await alinhando; if (meu !== pedido) return; }
     renderGlosa();
     guardaHistorico(atual);
   }
@@ -946,6 +948,54 @@ Frase: """${pt}"""`;
     }
     detalheEl.replaceChildren(...partes);
     rola();
+  }
+
+  // ---------- PT -> EN no contexto da frase ----------
+  // O dicionário offline dá o 1º sentido da palavra ("adiantar" -> "to bring to the front").
+  // Aqui cada palavra é consultada no Google (tradução + sinônimos do dicionário) e escolhe-se
+  // a opção que aparece na frase em inglês ("adiantar" -> "advance", "trabalhos" -> "work").
+  const cacheOpPT = new Map();
+  function opcoesPT(w) {
+    const k = w.toLowerCase();
+    if (!cacheOpPT.has(k)) {
+      const u = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=pt&tl=en&hl=pt&dj=1&dt=t&dt=bd&q=" + encodeURIComponent(k);
+      cacheOpPT.set(k, fetch(u).then((r) => r.ok ? r.json() : null).then((j) => {
+        if (!j) return null;
+        const t = (j.sentences || []).map((x) => x.trans || "").join("").trim();
+        const ops = [t];
+        for (const d of j.dict || []) {
+          for (const e of d.entry || []) ops.push(e.word);
+          for (const x of d.terms || []) ops.push(x);
+        }
+        const vistos = new Set();
+        return { t, ops: ops.filter((x) => x && !vistos.has(x.toLowerCase()) && vistos.add(x.toLowerCase())) };
+      }).catch(() => null));
+    }
+    return cacheOpPT.get(k);
+  }
+  const VAZIAS_EN = new Set(["to", "a", "an", "the", "of", "be", "i", "you", "he", "she", "we", "they", "it"]);
+  async function alinhaPT(lista, en, meu) {
+    const pal = (en.toLowerCase().match(/[a-z0-9]+(?:'[a-z]+)?/g) || []);
+    const exatas = new Set(pal), bases = new Set(pal.map(baseEN));
+    const res = await Promise.all(lista.map((p) => (p.expr || !/\p{L}/u.test(p.o)) ? null : opcoesPT(p.o)));
+    if (meu !== pedido) return;
+    lista.forEach((p, i) => {
+      const r = res[i];
+      if (!r) return;
+      let melhor = null, nota = 0;
+      // a do dicionário offline entra primeiro ("Vou" -> "I'm going" vence "going")
+      const offline = p.vazio ? [] : p.t.split(/\s*[,;/]\s*/).map((x) => x.replace(/…$/, "").trim());
+      [...offline, ...r.ops].forEach((op, ordem) => {
+        const ws = op.toLowerCase().split(/\s+/).filter((w) => !VAZIAS_EN.has(w));
+        if (!ws.length) return;
+        let n = 0;
+        for (const w of ws) { if (exatas.has(w)) n += 2; else if (bases.has(baseEN(w))) n += 1; else { n = 0; break; } }
+        n = n * 10 - ordem * 0.01; // empate: a opção mais comum
+        if (n > nota) { nota = n; melhor = op; }
+      });
+      if (melhor) { p.t = melhor; p.ctx = true; }
+      else if (r.t && (p.vazio || p.t.length > 24 || p.t.endsWith("…"))) { p.t = r.t.toLowerCase() === p.o.toLowerCase() ? p.t : r.t; p.vazio = false; }
+    });
   }
 
   async function gtx(q, dts) {
