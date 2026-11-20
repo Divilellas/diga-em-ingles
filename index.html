@@ -189,6 +189,66 @@ details.hist summary { cursor: pointer; color: var(--muted); font-size: 0.9rem; 
   padding: 12px 18px; font: inherit; font-weight: 700; cursor: pointer;
 }
 button:focus-visible, textarea:focus-visible { outline: 2px solid var(--en); outline-offset: 2px; }
+
+/* abas: Falar · Aprender · Texto */
+.abas { display: flex; gap: 6px; border-bottom: 1px solid var(--line); margin-top: -6px; }
+.abas button {
+  flex: 1; border: 0; background: none; color: var(--muted); font: inherit; font-size: 0.95rem; font-weight: 700;
+  padding: 10px 4px 12px; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -1px; min-height: 44px;
+}
+.abas button[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--en); }
+.aba { display: flex; flex-direction: column; gap: 18px; }
+.aba[hidden], .barra[hidden] { display: none; }
+body.sem-barra .wrap { padding-bottom: 48px; }
+
+/* Aprender: caixas e cartas */
+.cats { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
+.cats[hidden] { display: none; }
+.cat {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 16px 8px 14px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 16px; color: var(--fg); font: inherit; cursor: pointer;
+}
+.cat:hover { border-color: var(--en); }
+.cat-ico { font-size: 2.6rem; line-height: 1.1; }
+.cat-nome { font-weight: 700; font-size: 1.02rem; }
+.cat-qtd { font-size: 0.78rem; color: var(--muted); }
+.cat-cab { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.cat-cab h2 { flex: 1; margin: 0; font-family: var(--f-read); font-weight: 500; font-size: 1.4rem; }
+.cat-nomes { display: inline-flex; gap: 6px; align-items: center; font-size: 0.88rem; color: var(--muted); cursor: pointer; }
+.cartas { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; }
+.cartas .detalhe { grid-column: 1 / -1; }
+.carta {
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 2px; min-height: 100px;
+  padding: 8px 2px 6px; background: var(--bg); border: 1px solid var(--line); border-radius: 14px; color: var(--fg); font: inherit; cursor: pointer;
+}
+.carta:hover { border-color: var(--en); }
+.carta[aria-expanded="true"] { border-color: var(--en); background: var(--en-soft); }
+.carta-img { font-size: 2.6rem; line-height: 1.15; }
+.carta-img.num { font-family: var(--f-read); font-weight: 600; font-size: 2rem; line-height: 1.45; color: var(--fg); }
+.carta-en { font-family: var(--f-read); font-size: 1.08rem; color: var(--en); font-weight: 600; text-align: center; line-height: 1.15; overflow-wrap: anywhere; }
+.carta-pt { font-size: 0.76rem; color: var(--pt); text-align: center; line-height: 1.15; }
+.carta:not(.aberta) .carta-en, .carta:not(.aberta) .carta-pt { visibility: hidden; }
+
+/* Texto: colar/arrastar e ler */
+#zona-texto.solta-ativa { border: 2px dashed var(--en); background: var(--en-soft); }
+textarea#tx-entrada {
+  width: 100%; min-height: 7em; resize: vertical; border: 0; background: transparent; color: var(--fg);
+  font-family: var(--f-read); font-size: 1.1rem; line-height: 1.4; padding: 0;
+}
+textarea#tx-entrada:focus { outline: none; }
+.tx-botoes { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.tx-botoes .btn-trad { margin-left: auto; padding: 10px 16px; }
+.btn-ler { border: 1px solid var(--en); background: var(--en-soft); color: var(--en); border-radius: 999px; padding: 8px 14px; font: inherit; font-weight: 700; font-size: 0.88rem; cursor: pointer; min-height: 40px; }
+.frases { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.frase { padding: 10px 8px; border-radius: 10px; border-left: 3px solid transparent; display: flex; flex-direction: column; gap: 4px; }
+.frase.lendo { background: var(--en-soft); border-left-color: var(--en); }
+.fr-en { font-family: var(--f-read); font-size: 1.22rem; line-height: 1.45; color: var(--en); }
+.fr-en .w { background: none; border: 0; padding: 0 1px; margin: 0; font: inherit; color: inherit; cursor: pointer; border-radius: 4px; }
+.fr-en .w:hover, .fr-en .w[aria-expanded="true"] { background: var(--en-soft); box-shadow: inset 0 -2px 0 var(--en); }
+.fr-en .fr-som { border: 0; background: none; color: var(--en); cursor: pointer; padding: 0 4px; vertical-align: -3px; }
+.fr-en .fr-som svg { width: 18px; height: 18px; }
+.fr-pt { font-size: 0.95rem; color: var(--pt); }
+.frase .detalhe { margin-top: 6px; }
 </style>
 
 <div class="wrap">
@@ -196,6 +256,14 @@ button:focus-visible, textarea:focus-visible { outline: 2px solid var(--en); out
     <h1>Diga em <span>Inglês</span></h1>
     <span class="engine" id="motor">carregando…</span>
   </header>
+
+  <nav class="abas" role="tablist" aria-label="Modos do app">
+    <button role="tab" id="tab-falar" aria-selected="true" aria-controls="aba-falar">🎤 Falar</button>
+    <button role="tab" id="tab-aprender" aria-selected="false" aria-controls="aba-aprender">🧸 Aprender</button>
+    <button role="tab" id="tab-texto" aria-selected="false" aria-controls="aba-texto">📄 Texto</button>
+  </nav>
+
+  <div class="aba" id="aba-falar" role="tabpanel" aria-labelledby="tab-falar">
 
   <section class="panel" aria-labelledby="lbl-pt">
     <div class="cab-pt">
@@ -250,6 +318,45 @@ button:focus-visible, textarea:focus-visible { outline: 2px solid var(--en); out
     <summary>Frases anteriores</summary>
     <ul id="hist-lista"></ul>
   </details>
+  </div>
+
+  <div class="aba" id="aba-aprender" role="tabpanel" aria-labelledby="tab-aprender" hidden>
+    <p class="dica" id="cats-dica">Escolha uma caixa. Toque numa imagem para ouvir em inglês e ver o nome, a classe e os usos.</p>
+    <div class="cats" id="cats"></div>
+    <section class="panel" id="cat-painel" hidden>
+      <div class="cat-cab">
+        <button class="btn-limpar" id="cat-voltar" type="button">← Caixas</button>
+        <h2 id="cat-titulo"></h2>
+        <label class="cat-nomes"><input type="checkbox" id="cat-mostrar"> Mostrar nomes</label>
+      </div>
+      <div class="cartas" id="cartas"></div>
+    </section>
+  </div>
+
+  <div class="aba" id="aba-texto" role="tabpanel" aria-labelledby="tab-texto" hidden>
+    <section class="panel" id="zona-texto">
+      <div class="cab-pt">
+        <span class="label">Texto em português ou inglês</span>
+        <button class="btn-limpar" id="tx-limpar" type="button">✕ Limpar</button>
+      </div>
+      <textarea id="tx-entrada" rows="5" placeholder="Cole, arraste ou digite um texto…" spellcheck="false"></textarea>
+      <div class="tx-botoes">
+        <button class="btn-limpar" id="tx-colar" type="button">📋 Colar</button>
+        <label class="btn-limpar" for="tx-arquivo">📂 Arquivo .txt</label>
+        <input type="file" id="tx-arquivo" accept=".txt,.md,.srt,text/plain" hidden>
+        <button class="btn-trad" id="tx-traduzir" type="button">Traduzir texto</button>
+      </div>
+      <p class="dica" id="tx-dica">Ao colar ou arrastar, a tradução sai sozinha. Texto em português: aparece em inglês. Texto em inglês: é lido em voz alta e cada palavra pode ser tocada.</p>
+    </section>
+    <section class="panel" id="tx-resultado" hidden>
+      <div class="glosa-cab">
+        <span class="label en" id="tx-rotulo">Em inglês</span>
+        <button class="btn-ler" id="tx-ler" type="button">▶ Ler tudo</button>
+      </div>
+      <p class="aviso" id="tx-aviso" hidden></p>
+      <ol class="frases" id="tx-frases"></ol>
+    </section>
+  </div>
 </div>
 
 <div class="barra">
@@ -323,6 +430,7 @@ button:focus-visible, textarea:focus-visible { outline: 2px solid var(--en); out
   }
   carregaScript("dicionario-pt-en.js", () => { DIC = window.DIC_PT_EN || null; atualizaMotor(); });
   carregaScript("expressoes-en.js", () => {});
+  carregaScript("vocab-en.js", () => { if (!$("#aba-aprender").hidden) montaCats(); });
 
   function tokens(texto) {
     const out = [];
@@ -829,7 +937,7 @@ Frase: """${pt}"""`;
 
   // de um bloco ("the traffic", "to eat", "get home") tira a palavra/expressão a pesquisar
   function alvoDe(p) {
-    let en = String((direcao === "pt" ? p.t : p.o) || "").split(" / ")[0];
+    let en = String(p.en || (direcao === "pt" ? p.t : p.o) || "").split(" / ")[0];
     en = en.replace(/’/g, "'").replace(/\([^)]*\)/g, " ").replace(/[^A-Za-z0-9' -]/g, " ").replace(/\s+/g, " ").trim();
     const pal = en.split(" ").filter(Boolean);
     const conteudo = pal.filter((w) => !DETS.has(w.toLowerCase()) && w.toLowerCase() !== "to");
@@ -838,7 +946,7 @@ Frase: """${pt}"""`;
     if (usa.length === 1 && usa[0].includes("'")) { const v = verboDaContracao(usa[0].toLowerCase()); if (v) usa = [v]; }
     const primeira = (usa[0] || "").toLowerCase();
     const I = window.IRREG_EN || {};
-    return { mostra: en, frase: usa.join(" "), primeira, lema: I[primeira] || primeira };
+    return { mostra: en, frase: usa.join(" "), primeira, lema: I[primeira] || primeira, classe: p.classe || "" };
   }
 
   function verboDaContracao(w) {
@@ -863,16 +971,19 @@ Frase: """${pt}"""`;
     tokAberto = null;
   }
 
-  async function abreDetalhe(p, botao) {
+  // dentro = onde o painel aparece (padrão: embaixo da palavra por palavra)
+  async function abreDetalhe(p, botao, dentro) {
     const alvo = alvoDe(p);
     if (!alvo.frase) return;
+    if (dentro && dentro.apos) dentro.apos.after(detalheEl); else if (dentro) dentro.append(detalheEl); else glosaEl.after(detalheEl);
     if (tokAberto) tokAberto.setAttribute("aria-expanded", "false");
     tokAberto = botao; botao.setAttribute("aria-expanded", "true");
     const meu = ++pedidoInfo;
     detalheEl.hidden = false;
     detalheEl.replaceChildren(cabecalho(alvo.mostra, ""), el("p", "det-msg", "Buscando classe e usos…"));
     rola();
-    let info = cacheInfo.get(alvo.frase);
+    const chave = alvo.frase + "|" + alvo.classe;
+    let info = cacheInfo.get(chave);
     const erros = [];
     if (!info) {
       try {
@@ -881,7 +992,7 @@ Frase: """${pt}"""`;
       // Google; se falhar (no Safari ele pode ser bloqueado), dicionário livre + MyMemory
       if (!info) { try { info = await infoGoogle(alvo); } catch (e) { erros.push("Google: " + motivo(e)); } }
       if (!info) { try { info = await infoReserva(alvo); } catch (e) { erros.push("reserva: " + motivo(e)); } }
-      if (info) cacheInfo.set(alvo.frase, info);
+      if (info) cacheInfo.set(chave, info);
     }
     if (meu !== pedidoInfo) return;
     renderDetalhe(alvo, p, info, erros.join("; "));
@@ -1033,14 +1144,17 @@ Frase: """${pt}"""`;
     classes.sort((a, b) => pos(a.c) - pos(b.c));
     if (classes.some((c) => c.termos.length)) for (let i = classes.length - 1; i >= 0; i--) if (!classes[i].termos.length) classes.splice(i, 1);
     // usos: a ordem dos sentidos no dicionário já é do mais comum para o menos comum
-    const usos = [];
+    let usos = [];
     for (const d of j.definitions || []) {
       for (const e of d.entry || []) {
-        if (usos.length >= 5) break;
         if (!e.example || /^see /i.test(e.gloss || "")) continue;
         usos.push({ en: maiuscula(e.example), sentidoEn: e.gloss || "", c: CLASSES[d.pos] || d.pos });
       }
     }
+    // classe pedida (ex.: as cartas do Aprender são substantivos) e a classe principal vêm primeiro
+    const prefere = [alvo.classe, classes[0] && classes[0].c].filter(Boolean);
+    const peso = (c) => { const i = prefere.indexOf(c); return i < 0 ? 9 : i; };
+    usos = usos.map((u, i) => [u, i]).sort((a, b) => peso(a[0].c) - peso(b[0].c) || a[1] - b[1]).map((x) => x[0]).slice(0, 5);
     // menos de 5: completa com as frases de exemplo avulsas do dicionário
     const vistos = new Set(usos.map((u) => u.en.toLowerCase()));
     for (const x of (j.examples && j.examples.example) || []) {
@@ -1243,6 +1357,250 @@ Responda SOMENTE com JSON:
     }));
   }
 
+  // ---------- abas ----------
+  const ABAS = ["falar", "aprender", "texto"];
+  function mostraAba(n) {
+    if (!ABAS.includes(n)) n = "falar";
+    ABAS.forEach((a) => {
+      $("#aba-" + a).hidden = a !== n;
+      $("#tab-" + a).setAttribute("aria-selected", String(a === n));
+    });
+    document.querySelector(".barra").hidden = n !== "falar";
+    document.body.classList.toggle("sem-barra", n !== "falar");
+    fechaDetalhe(); paraLeitura();
+    if (n === "aprender") montaCats();
+    LS.set("dei-aba", n);
+  }
+  ABAS.forEach((a) => $("#tab-" + a).addEventListener("click", () => { destravaVoz(); mostraAba(a); window.scrollTo({ top: 0 }); }));
+
+  // fala que avisa quando acabou (para ler um texto frase por frase)
+  function falarUm(texto) {
+    return new Promise((ok) => {
+      const devagar = $("#op-devagar").checked;
+      if (caps.tts && vozSalva.startsWith("claude:")) {
+        caps.tts.speak(texto, { language: "en", voice: vozSalva.slice(7), rate: devagar ? 0.75 : 1 }).then(ok, ok); return;
+      }
+      if (synth) {
+        try {
+          const u = new SpeechSynthesisUtterance(texto);
+          const v = vozEn && synth.getVoices().find((x) => x.voiceURI === vozEn.voiceURI);
+          if (v) { u.voice = v; u.lang = v.lang.replace("_", "-"); } else u.lang = "en-US";
+          u.rate = devagar ? 0.7 : 0.95;
+          u.onend = u.onerror = () => ok();
+          synth.speak(u);
+          setTimeout(ok, 3000 + texto.length * 160); // se o navegador não avisar o fim
+          return;
+        } catch (e) {}
+      }
+      if (caps.tts) { caps.tts.speak(texto, { language: "en" }).then(ok, ok); return; }
+      ok();
+    });
+  }
+
+  // ---------- Aprender: caixas com imagens ----------
+  let catAtual = null;
+  function montaCats() {
+    const V = window.VOCAB_EN, box = $("#cats");
+    if (!V) { box.replaceChildren(el("p", "det-msg", "Carregando as caixas…")); return; }
+    if (box.querySelector(".cat")) return;
+    box.replaceChildren(...V.map((c) => {
+      const b = el("button", "cat"); b.type = "button";
+      const ic = el("span", "cat-ico", c.icone); ic.setAttribute("aria-hidden", "true");
+      b.append(ic, el("span", "cat-nome", c.nome), el("span", "cat-qtd", c.itens.length + " palavras"));
+      b.addEventListener("click", () => { destravaVoz(); abreCat(c); });
+      return b;
+    }));
+  }
+  function abreCat(c) {
+    catAtual = c;
+    $("#cats").hidden = true; $("#cats-dica").hidden = true; $("#cat-painel").hidden = false;
+    $("#cat-titulo").textContent = c.icone + " " + c.nome;
+    renderCartas();
+    window.scrollTo({ top: 0 });
+  }
+  function renderCartas() {
+    if (!catAtual) return;
+    fechaDetalhe();
+    const mostrar = $("#cat-mostrar").checked;
+    $("#cartas").replaceChildren(...catAtual.itens.map(([img, en, pt]) => {
+      const b = el("button", "carta" + (mostrar ? " aberta" : "")); b.type = "button";
+      const im = el("span", "carta-img" + (/^\d+$/.test(img) ? " num" : ""), img); im.setAttribute("aria-hidden", "true");
+      b.append(im, el("span", "carta-en", en), el("span", "carta-pt", pt));
+      b.setAttribute("aria-label", pt + " — toque para ouvir em inglês");
+      b.setAttribute("aria-expanded", "false"); b.setAttribute("aria-controls", "detalhe");
+      b.addEventListener("click", () => {
+        destravaVoz();
+        b.classList.add("aberta"); b.setAttribute("aria-label", en + " — " + pt);
+        falar(en);
+        // o painel abre logo abaixo da linha da carta tocada
+        const linha = [...$("#cartas").querySelectorAll(".carta")].filter((x) => x.offsetTop === b.offsetTop);
+        const classe = catAtual.id === "numeros" ? "" : catAtual.id === "cores" ? "adjetivo" : "substantivo";
+        abreDetalhe({ o: en, t: pt, en, classe }, b, { apos: linha[linha.length - 1] || b });
+      });
+      return b;
+    }));
+  }
+  $("#cat-voltar").addEventListener("click", () => {
+    fechaDetalhe(); catAtual = null;
+    $("#cat-painel").hidden = true; $("#cats").hidden = false; $("#cats-dica").hidden = false;
+    window.scrollTo({ top: 0 });
+  });
+  $("#cat-mostrar").addEventListener("change", renderCartas);
+
+  // ---------- Texto: colar, arrastar ou abrir arquivo ----------
+  const txEntrada = $("#tx-entrada");
+  let txPedido = 0, txPares = [], lendo = 0;
+
+  function frasesDe(texto) {
+    return texto.replace(/\r/g, "").split(/\n+/)
+      .flatMap((par) => par.split(/(?<=[.!?…])\s+(?=["“'(\[]?[A-ZÀ-ÖØ-Þ0-9])/))
+      .map((x) => x.replace(/\s+/g, " ").trim()).filter(Boolean);
+  }
+  // reserva caso o Google não diga o idioma
+  function adivinhaIdioma(t) {
+    const x = " " + t.toLowerCase() + " ";
+    const conta = (re) => (x.match(re) || []).length;
+    const pt = conta(/\s(de|que|não|é|uma?|para|com|os|as|você|eu|está|são|mas|muito)\s/g) + conta(/ção|ões|ã|õ|ê|á|ç/g);
+    const en = conta(/\s(the|and|is|are|of|to|you|i|it|that|with|this|was|for|have)\s/g);
+    return pt > en ? "pt" : "en";
+  }
+  async function gtxBloco(linhas, sl, tl) {
+    const u = "https://translate.googleapis.com/translate_a/single?client=gtx&dj=1&dt=t&sl=" + sl + "&tl=" + tl + "&q=" + encodeURIComponent(linhas.join("\n"));
+    const r = await fetch(u);
+    if (!r.ok) throw new Error("http " + r.status);
+    const j = await r.json();
+    return { src: j.src, linhas: (j.sentences || []).map((x) => x.trans || "").join("").split("\n").map((x) => x.trim()) };
+  }
+  // traduz frase a frase, juntando em blocos de ~1500 caracteres (uma frase por linha)
+  async function traduzFrases(frases, sl, tl) {
+    const blocos = []; let b = [], tam = 0;
+    for (const f of frases) { if (b.length && tam + f.length > 1500) { blocos.push(b); b = []; tam = 0; } b.push(f); tam += f.length + 1; }
+    if (b.length) blocos.push(b);
+    const res = await Promise.all(blocos.map(async (bl) => {
+      const r = await gtxBloco(bl, sl, tl);
+      if (r.linhas.length === bl.length) return r.linhas;
+      return Promise.all(bl.map((f) => gtxBloco([f], sl, tl).then((x) => x.linhas.join(" ")).catch(() => "")));
+    }));
+    return res.flat();
+  }
+
+  async function traduzTexto() {
+    const texto = txEntrada.value.trim();
+    if (!texto) { txEntrada.focus(); return; }
+    const meu = ++txPedido;
+    paraLeitura(); fechaDetalhe();
+    let frases = frasesDe(texto);
+    const corte = frases.length > 300;
+    if (corte) frases = frases.slice(0, 300);
+    $("#tx-resultado").hidden = false; $("#tx-aviso").hidden = true;
+    $("#tx-frases").replaceChildren(el("li", "det-msg", "Traduzindo…"));
+    let src = adivinhaIdioma(texto);
+    try { const r = await gtxBloco([texto.slice(0, 400)], "auto", "pt"); if (r.src) src = r.src; } catch (e) {}
+    if (meu !== txPedido) return;
+    const dePt = src === "pt";
+    let trad, erro = "";
+    try { trad = await traduzFrases(frases, dePt ? "pt" : (src || "auto"), dePt ? "en" : "pt"); }
+    catch (e) {
+      erro = motivo(e);
+      // reserva: MyMemory, frase a frase (tem limite diário)
+      trad = await Promise.all(frases.map((f) => myMemory(f, dePt ? "pt-BR|en-US" : "en|pt-BR").catch(() => "")));
+    }
+    if (meu !== txPedido) return;
+    txPares = frases.map((f, i) => (dePt ? { en: trad[i] || "", pt: f } : { en: f, pt: trad[i] || "" }));
+    $("#tx-rotulo").textContent = dePt ? "Em inglês · com o original" : (src === "en" ? "Texto em inglês · tradução" : "Texto (" + src + ") · tradução");
+    const avisos = [];
+    if (corte) avisos.push("Texto longo: mostrei as primeiras 300 frases.");
+    if (erro && !trad.some(Boolean)) avisos.push("Não consegui traduzir agora (" + erro + ").");
+    if (src !== "pt" && src !== "en") avisos.push("O texto não parece estar em português nem em inglês; as palavras tocadas são pesquisadas como inglês.");
+    $("#tx-aviso").hidden = !avisos.length; $("#tx-aviso").textContent = avisos.join(" ");
+    renderTexto();
+    if (!dePt && $("#op-auto").checked) lerTudo(0); // texto em inglês: lê em voz alta
+  }
+
+  function renderTexto() {
+    $("#tx-frases").replaceChildren(...txPares.map((par, i) => {
+      const li = el("li", "frase");
+      const en = el("div", "fr-en");
+      for (const parte of par.en.split(/(\s+)/)) {
+        const w = parte.replace(/^[^A-Za-z0-9']+|[^A-Za-z0-9']+$/g, "");
+        if (!/[A-Za-z]/.test(w)) { en.append(document.createTextNode(parte)); continue; }
+        const ini = parte.slice(0, parte.indexOf(w)), fim = parte.slice(parte.indexOf(w) + w.length);
+        if (ini) en.append(document.createTextNode(ini));
+        const b = el("button", "w", w); b.type = "button";
+        b.setAttribute("aria-expanded", "false"); b.setAttribute("aria-controls", "detalhe");
+        b.addEventListener("click", () => { destravaVoz(); paraLeitura(); falar(w); abreDetalhe({ o: w, t: "", en: w }, b, li); });
+        en.append(b);
+        if (fim) en.append(document.createTextNode(fim));
+      }
+      const som = el("button", "fr-som"); som.type = "button"; som.innerHTML = ICO_SOM;
+      som.setAttribute("aria-label", "Ouvir esta frase");
+      som.addEventListener("click", () => { destravaVoz(); lerTudo(i, true); });
+      en.append(" ", som);
+      li.append(en);
+      if (par.pt) li.append(el("div", "fr-pt", par.pt));
+      return li;
+    }));
+  }
+
+  function paraLeitura() {
+    lendo++;
+    document.querySelectorAll(".frase.lendo").forEach((x) => x.classList.remove("lendo"));
+    $("#tx-ler").textContent = "▶ Ler tudo";
+    try { if (synth) synth.cancel(); } catch (e) {}
+    try { if (caps.tts) caps.tts.stop(); } catch (e) {}
+  }
+  async function lerTudo(desde, soUma) {
+    paraLeitura();
+    const meu = lendo;
+    if (!soUma) $("#tx-ler").textContent = "■ Parar";
+    const lis = [...document.querySelectorAll("#tx-frases .frase")];
+    for (let i = desde; i < lis.length; i++) {
+      if (meu !== lendo) return;
+      lis.forEach((x) => x.classList.remove("lendo"));
+      lis[i].classList.add("lendo");
+      try { lis[i].scrollIntoView({ block: "nearest", behavior: "smooth" }); } catch (e) {}
+      await falarUm(txPares[i].en);
+      if (soUma) break;
+    }
+    if (meu === lendo) paraLeitura();
+  }
+  $("#tx-ler").addEventListener("click", () => { destravaVoz(); if ($("#tx-ler").textContent.startsWith("■")) paraLeitura(); else lerTudo(0); });
+  $("#tx-traduzir").addEventListener("click", () => { destravaVoz(); traduzTexto(); });
+  $("#tx-limpar").addEventListener("click", () => {
+    txPedido++; paraLeitura(); fechaDetalhe();
+    txEntrada.value = ""; txPares = [];
+    $("#tx-resultado").hidden = true; $("#tx-frases").replaceChildren();
+    txEntrada.focus();
+  });
+  $("#tx-colar").addEventListener("click", async () => {
+    destravaVoz();
+    try {
+      const t = await navigator.clipboard.readText();
+      if (t && t.trim()) { txEntrada.value = t; traduzTexto(); return; }
+    } catch (e) {}
+    txEntrada.focus();
+    $("#tx-dica").textContent = "Toque e segure no campo acima e escolha Colar.";
+  });
+  // colou no campo: traduz sozinho
+  txEntrada.addEventListener("paste", () => setTimeout(() => { destravaVoz(); traduzTexto(); }, 50));
+  $("#tx-arquivo").addEventListener("change", async (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    try { txEntrada.value = await f.text(); destravaVoz(); traduzTexto(); } catch (err) {}
+    e.target.value = "";
+  });
+  // arrastar texto ou arquivo .txt (no PC)
+  const zona = $("#zona-texto");
+  ["dragenter", "dragover"].forEach((ev) => zona.addEventListener(ev, (e) => { e.preventDefault(); zona.classList.add("solta-ativa"); }));
+  ["dragleave", "drop"].forEach((ev) => zona.addEventListener(ev, () => zona.classList.remove("solta-ativa")));
+  zona.addEventListener("drop", async (e) => {
+    e.preventDefault();
+    const f = e.dataTransfer.files && e.dataTransfer.files[0];
+    let t = "";
+    try { t = f ? await f.text() : (e.dataTransfer.getData("text/plain") || e.dataTransfer.getData("text")); } catch (err) {}
+    if (t && t.trim()) { txEntrada.value = t; destravaVoz(); traduzTexto(); }
+  });
+
   // ---------- início: mostra o exemplo ----------
   atual = EXEMPLO;
   entrada.value = "";
@@ -1250,5 +1608,6 @@ Responda SOMENTE com JSON:
   saidaEn.textContent = EXEMPLO.en;
   renderGlosa();
   renderHistorico();
+  mostraAba(LS.get("dei-aba", "falar"));
 })();
 </script>
